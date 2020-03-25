@@ -1,7 +1,5 @@
-
-use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
-use winit::event_loop::{EventLoop, ControlFlow};
-
+use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+use winit::event_loop::{ControlFlow, EventLoop};
 
 const IS_PAINT_FPS_COUNTER: bool = true;
 
@@ -32,7 +30,6 @@ pub struct ProgramProc {
 }
 
 impl ProgramProc {
-
     pub fn new() -> ProgramProc {
         // init window stuff
         let event_loop = EventLoop::new();
@@ -41,42 +38,38 @@ impl ProgramProc {
     }
 
     pub fn main_loop<A: 'static + VulkanApp>(self, mut vulkan_app: A) {
-
         let mut tick_counter = super::fps_limiter::FPSLimiter::new();
 
-        self.event_loop.run(move |event, _, control_flow| {
-
-            match event {
-                | Event::WindowEvent { event, .. } => {
-                    match event {
-                        | WindowEvent::CloseRequested => {
-                            vulkan_app.wait_device_idle();
-                            *control_flow = ControlFlow::Exit
-                        },
-                        | WindowEvent::KeyboardInput { input, .. } => {
-                            match input {
-                                | KeyboardInput { virtual_keycode, state, .. } => {
-                                    match (virtual_keycode, state) {
-                                        | (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
-                                            vulkan_app.wait_device_idle();
-                                            *control_flow = ControlFlow::Exit
-                                        },
-                                        | _ => {},
-                                    }
-                                },
-                            }
-                        },
-                        | WindowEvent::Resized(_new_size) => {
-                            vulkan_app.wait_device_idle();
-                            vulkan_app.resize_framebuffer();
-                        },
-                        | _ => {},
+        self.event_loop
+            .run(move |event, _, control_flow| match event {
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::CloseRequested => {
+                        vulkan_app.wait_device_idle();
+                        *control_flow = ControlFlow::Exit
                     }
+                    WindowEvent::KeyboardInput { input, .. } => match input {
+                        KeyboardInput {
+                            virtual_keycode,
+                            state,
+                            ..
+                        } => match (virtual_keycode, state) {
+                            (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
+                                vulkan_app.wait_device_idle();
+                                *control_flow = ControlFlow::Exit
+                            }
+                            _ => {}
+                        },
+                    },
+                    WindowEvent::Resized(_new_size) => {
+                        vulkan_app.wait_device_idle();
+                        vulkan_app.resize_framebuffer();
+                    }
+                    _ => {}
                 },
-                | Event::MainEventsCleared => {
+                Event::MainEventsCleared => {
                     vulkan_app.window_ref().request_redraw();
-                },
-                | Event::RedrawRequested(_window_id) => {
+                }
+                Event::RedrawRequested(_window_id) => {
                     let delta_time = tick_counter.delta_time();
                     vulkan_app.draw_frame(delta_time);
 
@@ -85,14 +78,11 @@ impl ProgramProc {
                     }
 
                     tick_counter.tick_frame();
-                },
-                | Event::LoopDestroyed => {
+                }
+                Event::LoopDestroyed => {
                     vulkan_app.wait_device_idle();
-                },
+                }
                 _ => (),
-            }
-
-        })
+            })
     }
-
 }

@@ -17,9 +17,14 @@ use std::ptr;
 use crate::utility::constants::*;
 use crate::utility::debug;
 use crate::utility::platforms;
-use crate::utility::structures::*;
 
+use crate::vk_assist::structures::Vertex;
+use crate::vk_assist::types::buffer::Buffer;
+use crate::vk_assist::types::command::{
+    begin_single_time_command, end_single_time_command, find_memory_type,
+};
 use crate::vk_assist::types::queue_family::QueueFamilyIndices;
+use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
 
 pub fn create_instance(
     entry: &ash::Entry,
@@ -132,62 +137,6 @@ pub fn find_queue_family(
     queue_family_indices
 }
 
-pub fn check_device_extension_support(
-    instance: &ash::Instance,
-    physical_device: vk::PhysicalDevice,
-    device_extensions: &DeviceExtension,
-) -> bool {
-    let available_extensions = unsafe {
-        instance
-            .enumerate_device_extension_properties(physical_device)
-            .expect("Failed to get device extension properties.")
-    };
-
-    let mut available_extension_names = vec![];
-
-    for extension in available_extensions.iter() {
-        let extension_name = super::tools::vk_to_string(&extension.extension_name);
-
-        available_extension_names.push(extension_name);
-    }
-
-    use std::collections::HashSet;
-    let mut required_extensions = HashSet::new();
-    for extension in device_extensions.names.iter() {
-        required_extensions.insert(extension.to_string());
-    }
-
-    for extension_name in available_extension_names.iter() {
-        required_extensions.remove(extension_name);
-    }
-
-    return required_extensions.is_empty();
-}
-
-pub fn query_swapchain_support(
-    physical_device: vk::PhysicalDevice,
-    surface_loader: &ash::extensions::khr::Surface,
-    surface: &vk::SurfaceKHR,
-) -> SwapChainSupportDetail {
-    unsafe {
-        let capabilities = surface_loader
-            .get_physical_device_surface_capabilities(physical_device, *surface)
-            .expect("Failed to query for surface capabilities.");
-        let formats = surface_loader
-            .get_physical_device_surface_formats(physical_device, *surface)
-            .expect("Failed to query for surface formats.");
-        let present_modes = surface_loader
-            .get_physical_device_surface_present_modes(physical_device, *surface)
-            .expect("Failed to query for surface present mode.");
-
-        SwapChainSupportDetail {
-            capabilities,
-            formats,
-            present_modes,
-        }
-    }
-}
-
 pub fn create_shader_module(device: &ash::Device, code: Vec<u8>) -> vk::ShaderModule {
     let shader_module_create_info = vk::ShaderModuleCreateInfo {
         s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
@@ -202,168 +151,6 @@ pub fn create_shader_module(device: &ash::Device, code: Vec<u8>) -> vk::ShaderMo
             .create_shader_module(&shader_module_create_info, None)
             .expect("Failed to create Shader Module!")
     }
-}
-
-pub fn create_buffer(
-    device: &ash::Device,
-    size: vk::DeviceSize,
-    usage: vk::BufferUsageFlags,
-    required_memory_properties: vk::MemoryPropertyFlags,
-    device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
-) -> (vk::Buffer, vk::DeviceMemory) {
-    let buffer_create_info = vk::BufferCreateInfo {
-        s_type: vk::StructureType::BUFFER_CREATE_INFO,
-        p_next: ptr::null(),
-        flags: vk::BufferCreateFlags::empty(),
-        size,
-        usage,
-        sharing_mode: vk::SharingMode::EXCLUSIVE,
-        queue_family_index_count: 0,
-        p_queue_family_indices: ptr::null(),
-    };
-
-    let buffer = unsafe {
-        device
-            .create_buffer(&buffer_create_info, None)
-            .expect("Failed to create Vertex Buffer")
-    };
-
-    let mem_requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
-    let memory_type = find_memory_type(
-        mem_requirements.memory_type_bits,
-        required_memory_properties,
-        device_memory_properties,
-    );
-
-    let allocate_info = vk::MemoryAllocateInfo {
-        s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
-        p_next: ptr::null(),
-        allocation_size: mem_requirements.size,
-        memory_type_index: memory_type,
-    };
-
-    let buffer_memory = unsafe {
-        device
-            .allocate_memory(&allocate_info, None)
-            .expect("Failed to allocate vertex buffer memory!")
-    };
-
-    unsafe {
-        device
-            .bind_buffer_memory(buffer, buffer_memory, 0)
-            .expect("Failed to bind Buffer");
-    }
-
-    (buffer, buffer_memory)
-}
-
-pub fn copy_buffer(
-    device: &ash::Device,
-    submit_queue: vk::Queue,
-    command_pool: vk::CommandPool,
-    src_buffer: vk::Buffer,
-    dst_buffer: vk::Buffer,
-    size: vk::DeviceSize,
-) {
-    let command_buffer = begin_single_time_command(device, command_pool);
-
-    let copy_regions = [vk::BufferCopy {
-        src_offset: 0,
-        dst_offset: 0,
-        size,
-    }];
-
-    unsafe {
-        device.cmd_copy_buffer(command_buffer, src_buffer, dst_buffer, &copy_regions);
-    }
-
-    end_single_time_command(device, command_pool, submit_queue, command_buffer);
-}
-
-pub fn begin_single_time_command(
-    device: &ash::Device,
-    command_pool: vk::CommandPool,
-) -> vk::CommandBuffer {
-    let command_buffer_allocate_info = vk::CommandBufferAllocateInfo {
-        s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
-        p_next: ptr::null(),
-        command_buffer_count: 1,
-        command_pool,
-        level: vk::CommandBufferLevel::PRIMARY,
-    };
-
-    let command_buffer = unsafe {
-        device
-            .allocate_command_buffers(&command_buffer_allocate_info)
-            .expect("Failed to allocate Command Buffers!")
-    }[0];
-
-    let command_buffer_begin_info = vk::CommandBufferBeginInfo {
-        s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
-        p_next: ptr::null(),
-        p_inheritance_info: ptr::null(),
-        flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
-    };
-
-    unsafe {
-        device
-            .begin_command_buffer(command_buffer, &command_buffer_begin_info)
-            .expect("Failed to begin recording Command Buffer at beginning!");
-    }
-
-    command_buffer
-}
-
-pub fn end_single_time_command(
-    device: &ash::Device,
-    command_pool: vk::CommandPool,
-    submit_queue: vk::Queue,
-    command_buffer: vk::CommandBuffer,
-) {
-    unsafe {
-        device
-            .end_command_buffer(command_buffer)
-            .expect("Failed to record Command Buffer at Ending!");
-    }
-
-    let buffers_to_submit = [command_buffer];
-
-    let sumbit_infos = [vk::SubmitInfo {
-        s_type: vk::StructureType::SUBMIT_INFO,
-        p_next: ptr::null(),
-        wait_semaphore_count: 0,
-        p_wait_semaphores: ptr::null(),
-        p_wait_dst_stage_mask: ptr::null(),
-        command_buffer_count: 1,
-        p_command_buffers: buffers_to_submit.as_ptr(),
-        signal_semaphore_count: 0,
-        p_signal_semaphores: ptr::null(),
-    }];
-
-    unsafe {
-        device
-            .queue_submit(submit_queue, &sumbit_infos, vk::Fence::null())
-            .expect("Failed to Queue Submit!");
-        device
-            .queue_wait_idle(submit_queue)
-            .expect("Failed to wait Queue idle!");
-        device.free_command_buffers(command_pool, &buffers_to_submit);
-    }
-}
-
-pub fn find_memory_type(
-    type_filter: u32,
-    required_properties: vk::MemoryPropertyFlags,
-    mem_properties: &vk::PhysicalDeviceMemoryProperties,
-) -> u32 {
-    for (i, memory_type) in mem_properties.memory_types.iter().enumerate() {
-        if (type_filter & (1 << i)) > 0 && memory_type.property_flags.contains(required_properties)
-        {
-            return i as u32;
-        }
-    }
-
-    panic!("Failed to find suitable memory type!")
 }
 
 pub fn has_stencil_component(format: vk::Format) -> bool {
@@ -453,7 +240,7 @@ pub fn find_supported_format(
     panic!("Failed to find supported format!")
 }
 
-pub fn load_model(model_path: &Path) -> (Vec<VertexV3>, Vec<u32>) {
+pub fn load_model(model_path: &Path) -> (Vec<Vertex>, Vec<u32>) {
     let model_obj = tobj::load_obj(model_path).expect("Failed to load model object!");
 
     let mut vertices = vec![];
@@ -469,15 +256,14 @@ pub fn load_model(model_path: &Path) -> (Vec<VertexV3>, Vec<u32>) {
 
         let total_vertices_count = mesh.positions.len() / 3;
         for i in 0..total_vertices_count {
-            let vertex = VertexV3 {
-                pos: [
+            let vertex = Vertex {
+                pos: Vec3::new(
                     mesh.positions[i * 3],
                     mesh.positions[i * 3 + 1],
                     mesh.positions[i * 3 + 2],
-                    1.0,
-                ],
-                color: [1.0, 1.0, 1.0, 1.0],
-                tex_coord: [mesh.texcoords[i * 2], mesh.texcoords[i * 2 + 1]],
+                ),
+                color: Vec3::new(1.0, 1.0, 1.0),
+                tex_coord: Vec2::new(mesh.texcoords[i * 2], mesh.texcoords[i * 2 + 1]),
             };
             vertices.push(vertex);
         }

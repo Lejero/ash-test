@@ -1,13 +1,20 @@
 use ash::vk;
 use image;
 use image::GenericImageView;
+use std::sync::Arc;
 
 use std::cmp::max;
 use std::ffi::CString;
 use std::path::Path;
 use std::ptr;
 
+use crate::vk_assist::structures::{SyncObjects, UniformBufferObject, Vertex};
+use crate::vk_assist::types::buffer::{copy_buffer, create_buffer, Buffer};
+use crate::vk_assist::types::command::{
+    begin_single_time_command, end_single_time_command, find_memory_type,
+};
 use crate::vk_assist::types::queue_family::QueueFamilyIndices;
+use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
 
 use super::*;
 
@@ -80,11 +87,11 @@ pub fn create_graphics_pipeline(
 ) -> (vk::Pipeline, vk::PipelineLayout) {
     let vert_shader_module = create_shader_module(
         device,
-        include_bytes!("../../../shaders/spv/09-shader-base.vert.spv").to_vec(),
+        include_bytes!(r"..\..\..\shaders\base.vert.spv").to_vec(),
     );
     let frag_shader_module = create_shader_module(
         device,
-        include_bytes!("../../../shaders/spv/09-shader-base.frag.spv").to_vec(),
+        include_bytes!(r"..\..\..\shaders\base.frag.spv").to_vec(),
     );
 
     let main_function_name = CString::new("main").unwrap(); // the beginning function name in shader code.
@@ -460,7 +467,7 @@ pub fn create_sync_objects(device: &ash::Device, max_frame_in_flight: usize) -> 
 }
 
 pub fn create_vertex_buffer<T>(
-    device: &ash::Device,
+    device: Arc<ash::Device>,
     device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
     command_pool: vk::CommandPool,
     submit_queue: vk::Queue,
@@ -469,7 +476,7 @@ pub fn create_vertex_buffer<T>(
     let buffer_size = ::std::mem::size_of_val(data) as vk::DeviceSize;
 
     let (staging_buffer, staging_buffer_memory) = create_buffer(
-        device,
+        device.clone(),
         buffer_size,
         vk::BufferUsageFlags::TRANSFER_SRC,
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
@@ -492,7 +499,7 @@ pub fn create_vertex_buffer<T>(
     }
 
     let (vertex_buffer, vertex_buffer_memory) = create_buffer(
-        device,
+        device.clone(),
         buffer_size,
         vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -500,7 +507,7 @@ pub fn create_vertex_buffer<T>(
     );
 
     copy_buffer(
-        device,
+        device.clone(),
         submit_queue,
         command_pool,
         staging_buffer,
@@ -517,7 +524,7 @@ pub fn create_vertex_buffer<T>(
 }
 
 pub fn create_index_buffer(
-    device: &ash::Device,
+    device: Arc<ash::Device>,
     device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
     command_pool: vk::CommandPool,
     submit_queue: vk::Queue,
@@ -526,7 +533,7 @@ pub fn create_index_buffer(
     let buffer_size = ::std::mem::size_of_val(data) as vk::DeviceSize;
 
     let (staging_buffer, staging_buffer_memory) = create_buffer(
-        device,
+        device.clone(),
         buffer_size,
         vk::BufferUsageFlags::TRANSFER_SRC,
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
@@ -549,7 +556,7 @@ pub fn create_index_buffer(
     }
 
     let (index_buffer, index_buffer_memory) = create_buffer(
-        device,
+        device.clone(),
         buffer_size,
         vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -557,7 +564,7 @@ pub fn create_index_buffer(
     );
 
     copy_buffer(
-        device,
+        device.clone(),
         submit_queue,
         command_pool,
         staging_buffer,
@@ -677,7 +684,7 @@ pub fn create_descriptor_set_layout(device: &ash::Device) -> vk::DescriptorSetLa
 }
 
 pub fn create_uniform_buffers(
-    device: &ash::Device,
+    device: Arc<ash::Device>,
     device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
     swapchain_image_count: usize,
 ) -> (Vec<vk::Buffer>, Vec<vk::DeviceMemory>) {
@@ -688,7 +695,7 @@ pub fn create_uniform_buffers(
 
     for _ in 0..swapchain_image_count {
         let (uniform_buffer, uniform_buffer_memory) = create_buffer(
-            device,
+            device.clone(),
             buffer_size as u64,
             vk::BufferUsageFlags::UNIFORM_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
@@ -946,7 +953,7 @@ pub fn create_texture_sampler(device: &ash::Device) -> vk::Sampler {
 }
 
 pub fn create_texture_image(
-    device: &ash::Device,
+    device: Arc<ash::Device>,
     command_pool: vk::CommandPool,
     submit_queue: vk::Queue,
     device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
@@ -971,7 +978,7 @@ pub fn create_texture_image(
     }
 
     let (staging_buffer, staging_buffer_memory) = create_buffer(
-        device,
+        device.clone(),
         image_size,
         vk::BufferUsageFlags::TRANSFER_SRC,
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
@@ -994,7 +1001,7 @@ pub fn create_texture_image(
     }
 
     let (texture_image, texture_image_memory) = create_image(
-        device,
+        &device,
         image_width,
         image_height,
         1,
@@ -1007,7 +1014,7 @@ pub fn create_texture_image(
     );
 
     transition_image_layout(
-        device,
+        &device,
         command_pool,
         submit_queue,
         texture_image,
@@ -1018,7 +1025,7 @@ pub fn create_texture_image(
     );
 
     copy_buffer_to_image(
-        device,
+        &device,
         command_pool,
         submit_queue,
         staging_buffer,
@@ -1028,7 +1035,7 @@ pub fn create_texture_image(
     );
 
     transition_image_layout(
-        device,
+        &device,
         command_pool,
         submit_queue,
         texture_image,

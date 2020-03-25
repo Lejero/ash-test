@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 extern crate ash;
 
 use crate::vk_assist::types::vulkan_surface::VulkanSurface;

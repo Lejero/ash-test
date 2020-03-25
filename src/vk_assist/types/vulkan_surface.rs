@@ -1,4 +1,7 @@
-use crate::utility::{constants::*, debug::*, platforms, share, structures::*};
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
+use crate::utility::{constants::*, debug::*, platforms, share};
 use ash::version::DeviceV1_0;
 use ash::version::InstanceV1_0;
 use ash::vk;
@@ -28,6 +31,14 @@ impl VulkanSurface {
             surface,
             screen_width,
             screen_height,
+        }
+    }
+}
+
+impl Drop for VulkanSurface {
+    fn drop(&mut self) {
+        unsafe {
+            self.surface_loader.destroy_surface(self.surface, None);
         }
     }
 }

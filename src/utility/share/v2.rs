@@ -3,6 +3,8 @@ use ash::vk;
 use std::ptr;
 
 use super::*;
+use crate::vk_assist::structures::{SyncObjects, UniformBufferObject, Vertex};
+use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
 
 pub fn create_descriptor_pool(
     device: &ash::Device,

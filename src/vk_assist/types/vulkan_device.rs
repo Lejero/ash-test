@@ -1,6 +1,7 @@
-//mod utility;
+#![allow(dead_code)]
+#![allow(unused_imports)]
 
-use crate::utility::{constants::*, debug, share, structures, tools};
+use crate::utility::{constants::*, debug, share, tools};
 use crate::vk_assist::types::{
     queue_family, vulkan_surface::VulkanSurface, vulkan_swap_chain,
     vulkan_swap_chain::SwapChainSupportDetail,
@@ -29,7 +30,7 @@ pub const SWAP_CHAIN_ONLY_EXTENSIONS: DeviceExtensions = DeviceExtensions {
 
 pub struct VulkanDevice {
     pub physical_device: vk::PhysicalDevice,
-    pub logical_device: ash::Device,
+    pub logical_device: Arc<ash::Device>,
 
     pub queue_family: queue_family::QueueFamilyIndices,
     pub graphics_queue: vk::Queue,
@@ -57,10 +58,18 @@ impl VulkanDevice {
 
         VulkanDevice {
             physical_device,
-            logical_device,
+            logical_device: Arc::new(logical_device),
             queue_family,
             graphics_queue,
             present_queue,
+        }
+    }
+}
+
+impl Drop for VulkanDevice {
+    fn drop(&mut self) {
+        unsafe {
+            self.logical_device.destroy_device(None);
         }
     }
 }

@@ -1,3 +1,5 @@
+pub mod buffer;
+pub mod command;
 pub mod frame_manager;
 pub mod queue_family;
 pub mod vulkan_device;
