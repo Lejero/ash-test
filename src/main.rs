@@ -1,4 +1,5 @@
 mod g_model;
+mod pipelines;
 mod scene;
 mod utility;
 mod vk_assist;

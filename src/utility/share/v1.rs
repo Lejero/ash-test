@@ -9,7 +9,7 @@ use std::path::Path;
 use std::ptr;
 
 use crate::vk_assist::structures::{SyncObjects, UniformBufferObject, Vertex};
-use crate::vk_assist::types::buffer::{copy_buffer, create_buffer, Buffer};
+use crate::vk_assist::types::buffer::{copy_buffer, create_buffer_2, Buffer};
 use crate::vk_assist::types::command::{
     begin_single_time_command, end_single_time_command, find_memory_type,
 };
@@ -475,7 +475,7 @@ pub fn create_vertex_buffer<T>(
 ) -> (vk::Buffer, vk::DeviceMemory) {
     let buffer_size = ::std::mem::size_of_val(data) as vk::DeviceSize;
 
-    let (staging_buffer, staging_buffer_memory) = create_buffer(
+    let (staging_buffer, staging_buffer_memory) = create_buffer_2(
         device.clone(),
         buffer_size,
         vk::BufferUsageFlags::TRANSFER_SRC,
@@ -498,7 +498,7 @@ pub fn create_vertex_buffer<T>(
         device.unmap_memory(staging_buffer_memory);
     }
 
-    let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+    let (vertex_buffer, vertex_buffer_memory) = create_buffer_2(
         device.clone(),
         buffer_size,
         vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
@@ -532,7 +532,7 @@ pub fn create_index_buffer(
 ) -> (vk::Buffer, vk::DeviceMemory) {
     let buffer_size = ::std::mem::size_of_val(data) as vk::DeviceSize;
 
-    let (staging_buffer, staging_buffer_memory) = create_buffer(
+    let (staging_buffer, staging_buffer_memory) = create_buffer_2(
         device.clone(),
         buffer_size,
         vk::BufferUsageFlags::TRANSFER_SRC,
@@ -555,7 +555,7 @@ pub fn create_index_buffer(
         device.unmap_memory(staging_buffer_memory);
     }
 
-    let (index_buffer, index_buffer_memory) = create_buffer(
+    let (index_buffer, index_buffer_memory) = create_buffer_2(
         device.clone(),
         buffer_size,
         vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
@@ -694,7 +694,7 @@ pub fn create_uniform_buffers(
     let mut uniform_buffers_memory = vec![];
 
     for _ in 0..swapchain_image_count {
-        let (uniform_buffer, uniform_buffer_memory) = create_buffer(
+        let (uniform_buffer, uniform_buffer_memory) = create_buffer_2(
             device.clone(),
             buffer_size as u64,
             vk::BufferUsageFlags::UNIFORM_BUFFER,
@@ -977,7 +977,7 @@ pub fn create_texture_image(
         panic!("Failed to load texture image!")
     }
 
-    let (staging_buffer, staging_buffer_memory) = create_buffer(
+    let (staging_buffer, staging_buffer_memory) = create_buffer_2(
         device.clone(),
         image_size,
         vk::BufferUsageFlags::TRANSFER_SRC,

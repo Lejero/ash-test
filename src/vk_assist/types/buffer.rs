@@ -32,15 +32,46 @@ use super::command::{begin_single_time_command, end_single_time_command, find_me
 
 pub struct Buffer {
     device: Arc<ash::Device>,
-    buffer: vk::Buffer,
-    memory: vk::DeviceMemory,
+    pub buffer: vk::Buffer,
+    pub memory: vk::DeviceMemory,
     size: vk::DeviceSize,
     alignment: vk::DeviceSize,
     usage_flags: vk::BufferUsageFlags,
     mem_prop_flags: vk::MemoryPropertyFlags,
 }
 
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_buffer(self.buffer, None);
+            self.device.free_memory(self.memory, None);
+        }
+    }
+}
+
 impl Buffer {
+    pub fn get_device(&self) -> Arc<ash::Device> {
+        self.device.clone()
+    }
+    pub fn get_size(&self) -> &vk::DeviceSize {
+        &self.size
+    }
+    pub fn get_alighment(&self) -> &vk::DeviceSize {
+        &self.alignment
+    }
+    pub fn get_usage_flags(&self) -> &vk::BufferUsageFlags {
+        &self.usage_flags
+    }
+    pub fn get_mem_prop_flags(&self) -> &vk::MemoryPropertyFlags {
+        &self.mem_prop_flags
+    }
+
+    pub fn vk_destroy(&mut self) {
+        unsafe {
+            self.device.destroy_buffer(self.buffer, None);
+            self.device.free_memory(self.memory, None);
+        }
+    }
     // pub fn new(
     //     device: Arc<VulkanDevice>,
     //     size: vk::DeviceSize,
@@ -49,7 +80,7 @@ impl Buffer {
     // }
 }
 
-pub fn create_buffer_2(
+pub fn create_buffer(
     device: Arc<ash::Device>,
     size: vk::DeviceSize,
     usage: vk::BufferUsageFlags,
@@ -112,7 +143,7 @@ pub fn create_buffer_2(
     }
 }
 
-pub fn create_buffer(
+pub fn create_buffer_2(
     device: Arc<ash::Device>,
     size: vk::DeviceSize,
     usage: vk::BufferUsageFlags,

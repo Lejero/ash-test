@@ -29,6 +29,7 @@ pub const SWAP_CHAIN_ONLY_EXTENSIONS: DeviceExtensions = DeviceExtensions {
 };
 
 pub struct VulkanDevice {
+    instance: Arc<ash::Instance>,
     pub physical_device: vk::PhysicalDevice,
     pub logical_device: Arc<ash::Device>,
 
@@ -39,7 +40,7 @@ pub struct VulkanDevice {
 
 impl VulkanDevice {
     pub fn create_device(
-        instance: &ash::Instance,
+        instance: Arc<ash::Instance>,
         surface: &VulkanSurface,
         required_extensions: DeviceExtensions,
     ) -> VulkanDevice {
@@ -57,11 +58,19 @@ impl VulkanDevice {
             unsafe { logical_device.get_device_queue(queue_family.present_family.unwrap(), 0) };
 
         VulkanDevice {
+            instance: instance.clone(),
             physical_device,
             logical_device: Arc::new(logical_device),
             queue_family,
             graphics_queue,
             present_queue,
+        }
+    }
+
+    pub fn get_physical_device_memory_properties(&self) -> vk::PhysicalDeviceMemoryProperties {
+        unsafe {
+            self.instance
+                .get_physical_device_memory_properties(self.physical_device)
         }
     }
 }
