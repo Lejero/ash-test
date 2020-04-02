@@ -1,10 +1,14 @@
-mod scene;
+mod app;
+mod pipelines;
+mod utility;
+mod vk_assist;
+mod vk_model;
 
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::Window;
 
-use scene::VulkanApp;
+use app::scene::VulkanApp;
 
 fn main() {
     let event_loop = EventLoop::new();

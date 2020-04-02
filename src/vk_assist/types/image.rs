@@ -18,10 +18,16 @@ use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEve
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::Window;
 
+use std::f32::consts::PI;
 use std::ffi::CString;
+use std::path::Path;
 use std::ptr;
 
+use image::GenericImageView;
+
 use vk_assist::structures::{get_rect_as_basic, get_rectangle, SimpleVertex};
+use vk_assist::types::buffer as bfr;
+use vk_assist::types::command as cmd;
 use vk_assist::types::command::*;
 use vk_assist::types::{vulkan_device, vulkan_device::VulkanDevice, vulkan_surface::VulkanSurface, vulkan_swap_chain::*};
 
@@ -547,4 +553,79 @@ pub fn generate_mipmaps(device: Arc<VulkanDevice>, command_pool: vk::CommandPool
     }
 
     end_single_time_command(device.clone(), command_pool, submit_queue, command_buffer);
+}
+
+pub fn create_texture_image(device: Arc<VulkanDevice>, command_pool: vk::CommandPool, image_path: &Path) -> Image {
+    let mut image_object = image::open(image_path).unwrap(); // this function is slow in debug mode.
+    image_object = image_object.flipv();
+    let (image_width, image_height) = (image_object.width(), image_object.height());
+    let image_data = match &image_object {
+        image::DynamicImage::ImageBgr8(_) | image::DynamicImage::ImageLuma8(_) | image::DynamicImage::ImageRgb8(_) => image_object.to_rgba().into_raw(),
+        image::DynamicImage::ImageBgra8(_) | image::DynamicImage::ImageLumaA8(_) | image::DynamicImage::ImageRgba8(_) => image_object.raw_pixels(),
+    };
+
+    let image_size = (::std::mem::size_of::<u8>() as u32 * image_width * image_height * 4) as vk::DeviceSize;
+    let mip_levels = ((::std::cmp::max(image_width, image_height) as f32).log2().floor() as u32) + 1;
+
+    if image_size <= 0 {
+        panic!("Failed to load texture image!")
+    }
+
+    //Get CPU visible buffer for staging
+    let staging_buffer = bfr::create_buffer(
+        device.clone(),
+        image_size,
+        vk::BufferUsageFlags::TRANSFER_SRC,
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        &device.get_physical_device_memory_properties(),
+    );
+
+    //map enough memory to hold the image in the staging buffer. Copy the image into the buffer.
+    unsafe {
+        let data_ptr = device
+            .logical_device
+            .map_memory(staging_buffer.memory, 0, image_size, vk::MemoryMapFlags::empty())
+            .expect("Failed to Map Memory") as *mut u8;
+
+        data_ptr.copy_from_nonoverlapping(image_data.as_ptr(), image_data.len());
+
+        device.logical_device.unmap_memory(staging_buffer.memory);
+    }
+
+    let texture = Image::new(
+        device.clone(),
+        image_width,
+        image_height,
+        mip_levels,
+        vk::SampleCountFlags::TYPE_1,
+        vk::Format::R8G8B8A8_UNORM,
+        vk::ImageTiling::OPTIMAL,
+        vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+        vk::MemoryPropertyFlags::DEVICE_LOCAL,
+    );
+
+    transition_image_layout(
+        device.clone(),
+        command_pool,
+        device.graphics_queue,
+        texture.image,
+        vk::Format::R8G8B8A8_UNORM,
+        vk::ImageLayout::UNDEFINED,
+        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+        mip_levels,
+    );
+
+    copy_buffer_to_image(
+        device.clone(),
+        command_pool,
+        device.graphics_queue,
+        staging_buffer.buffer,
+        texture.image,
+        image_width,
+        image_height,
+    );
+
+    generate_mipmaps(device.clone(), command_pool, device.graphics_queue, &texture);
+
+    texture
 }
