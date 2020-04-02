@@ -1,6 +1,6 @@
-use crate::g_model;
 use crate::utility;
 use crate::vk_assist;
+use crate::vk_model;
 use std::sync::Arc;
 
 use ash::version::DeviceV1_0;
@@ -12,7 +12,8 @@ use utility::{constants::*, debug::*, share};
 use std::ffi::CString;
 use std::ptr;
 
-use vk_assist::structures::{get_rect_as_basic, SimpleVertex, UniformBufferObject};
+use vk_assist::structures::{SimpleVertex, UniformBufferObject};
+use vk_assist::types::vulkan_device::*;
 
 pub fn create_graphics_pipeline(
     device: &ash::Device,
@@ -20,14 +21,8 @@ pub fn create_graphics_pipeline(
     swapchain_extent: vk::Extent2D,
     ubo_set_layout: vk::DescriptorSetLayout,
 ) -> (vk::Pipeline, vk::PipelineLayout) {
-    let vert_shader_module = share::create_shader_module(
-        device,
-        include_bytes!("../../shaders/ubo.vert.spv").to_vec(),
-    );
-    let frag_shader_module = share::create_shader_module(
-        device,
-        include_bytes!("../../shaders/ubo.frag.spv").to_vec(),
-    );
+    let vert_shader_module = share::create_shader_module(device, include_bytes!("../../shaders/ubo.vert.spv").to_vec());
+    let frag_shader_module = share::create_shader_module(device, include_bytes!("../../shaders/ubo.frag.spv").to_vec());
 
     let main_function_name = CString::new("main").unwrap(); // the beginning function name in shader code.
 
@@ -214,11 +209,7 @@ pub fn create_graphics_pipeline(
 
     let graphics_pipelines = unsafe {
         device
-            .create_graphics_pipelines(
-                vk::PipelineCache::null(),
-                &graphic_pipeline_create_infos,
-                None,
-            )
+            .create_graphics_pipelines(vk::PipelineCache::null(), &graphic_pipeline_create_infos, None)
             .expect("Failed to create Graphics Pipeline!.")
     };
 
@@ -227,4 +218,29 @@ pub fn create_graphics_pipeline(
         device.destroy_shader_module(frag_shader_module, None);
     }
     (graphics_pipelines[0], pipeline_layout)
+}
+
+pub fn create_descriptor_set_layout(device: Arc<VulkanDevice>) -> vk::DescriptorSetLayout {
+    let ubo_layout_bindings = [vk::DescriptorSetLayoutBinding {
+        binding: 0,
+        descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+        descriptor_count: 1,
+        stage_flags: vk::ShaderStageFlags::VERTEX,
+        p_immutable_samplers: ptr::null(),
+    }];
+
+    let ubo_layout_create_info = vk::DescriptorSetLayoutCreateInfo {
+        s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        p_next: ptr::null(),
+        flags: vk::DescriptorSetLayoutCreateFlags::empty(),
+        binding_count: ubo_layout_bindings.len() as u32,
+        p_bindings: ubo_layout_bindings.as_ptr(),
+    };
+
+    unsafe {
+        device
+            .logical_device
+            .create_descriptor_set_layout(&ubo_layout_create_info, None)
+            .expect("Failed to create Descriptor Set Layout!")
+    }
 }

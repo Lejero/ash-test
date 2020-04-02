@@ -9,11 +9,15 @@ use std::path::Path;
 use std::ptr;
 
 use crate::vk_assist::structures::{SyncObjects, UniformBufferObject, Vertex};
+use crate::vk_assist::types::buffer as bfr;
 use crate::vk_assist::types::buffer::{copy_buffer, create_buffer_2, Buffer};
+use crate::vk_assist::types::command as cmd;
 use crate::vk_assist::types::command::{
     begin_single_time_command, end_single_time_command, find_memory_type,
 };
+use crate::vk_assist::types::image as img;
 use crate::vk_assist::types::queue_family::QueueFamilyIndices;
+use crate::vk_assist::types::vulkan_device::*;
 use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
 
 use super::*;
@@ -467,7 +471,7 @@ pub fn create_sync_objects(device: &ash::Device, max_frame_in_flight: usize) -> 
 }
 
 pub fn create_vertex_buffer<T>(
-    device: Arc<ash::Device>,
+    device: Arc<VulkanDevice>,
     device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
     command_pool: vk::CommandPool,
     submit_queue: vk::Queue,
@@ -476,7 +480,7 @@ pub fn create_vertex_buffer<T>(
     let buffer_size = ::std::mem::size_of_val(data) as vk::DeviceSize;
 
     let (staging_buffer, staging_buffer_memory) = create_buffer_2(
-        device.clone(),
+        device.logical_device.clone(),
         buffer_size,
         vk::BufferUsageFlags::TRANSFER_SRC,
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
@@ -485,6 +489,7 @@ pub fn create_vertex_buffer<T>(
 
     unsafe {
         let data_ptr = device
+            .logical_device
             .map_memory(
                 staging_buffer_memory,
                 0,
@@ -495,11 +500,11 @@ pub fn create_vertex_buffer<T>(
 
         data_ptr.copy_from_nonoverlapping(data.as_ptr(), data.len());
 
-        device.unmap_memory(staging_buffer_memory);
+        device.logical_device.unmap_memory(staging_buffer_memory);
     }
 
     let (vertex_buffer, vertex_buffer_memory) = create_buffer_2(
-        device.clone(),
+        device.logical_device.clone(),
         buffer_size,
         vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -516,15 +521,17 @@ pub fn create_vertex_buffer<T>(
     );
 
     unsafe {
-        device.destroy_buffer(staging_buffer, None);
-        device.free_memory(staging_buffer_memory, None);
+        device.logical_device.destroy_buffer(staging_buffer, None);
+        device
+            .logical_device
+            .free_memory(staging_buffer_memory, None);
     }
 
     (vertex_buffer, vertex_buffer_memory)
 }
 
 pub fn create_index_buffer(
-    device: Arc<ash::Device>,
+    device: Arc<VulkanDevice>,
     device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
     command_pool: vk::CommandPool,
     submit_queue: vk::Queue,
@@ -533,7 +540,7 @@ pub fn create_index_buffer(
     let buffer_size = ::std::mem::size_of_val(data) as vk::DeviceSize;
 
     let (staging_buffer, staging_buffer_memory) = create_buffer_2(
-        device.clone(),
+        device.logical_device.clone(),
         buffer_size,
         vk::BufferUsageFlags::TRANSFER_SRC,
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
@@ -542,6 +549,7 @@ pub fn create_index_buffer(
 
     unsafe {
         let data_ptr = device
+            .logical_device
             .map_memory(
                 staging_buffer_memory,
                 0,
@@ -552,11 +560,11 @@ pub fn create_index_buffer(
 
         data_ptr.copy_from_nonoverlapping(data.as_ptr(), data.len());
 
-        device.unmap_memory(staging_buffer_memory);
+        device.logical_device.unmap_memory(staging_buffer_memory);
     }
 
     let (index_buffer, index_buffer_memory) = create_buffer_2(
-        device.clone(),
+        device.logical_device.clone(),
         buffer_size,
         vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -573,8 +581,10 @@ pub fn create_index_buffer(
     );
 
     unsafe {
-        device.destroy_buffer(staging_buffer, None);
-        device.free_memory(staging_buffer_memory, None);
+        device.logical_device.destroy_buffer(staging_buffer, None);
+        device
+            .logical_device
+            .free_memory(staging_buffer_memory, None);
     }
 
     (index_buffer, index_buffer_memory)
@@ -709,7 +719,7 @@ pub fn create_uniform_buffers(
 }
 
 pub fn create_image(
-    device: &ash::Device,
+    device: Arc<ash::Device>,
     width: u32,
     height: u32,
     mip_levels: u32,
@@ -775,85 +785,8 @@ pub fn create_image(
     (texture_image, texture_image_memory)
 }
 
-pub fn transition_image_layout(
-    device: &ash::Device,
-    command_pool: vk::CommandPool,
-    submit_queue: vk::Queue,
-    image: vk::Image,
-    _format: vk::Format,
-    old_layout: vk::ImageLayout,
-    new_layout: vk::ImageLayout,
-    mip_levels: u32,
-) {
-    let command_buffer = begin_single_time_command(device, command_pool);
-
-    let src_access_mask;
-    let dst_access_mask;
-    let source_stage;
-    let destination_stage;
-
-    if old_layout == vk::ImageLayout::UNDEFINED
-        && new_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL
-    {
-        src_access_mask = vk::AccessFlags::empty();
-        dst_access_mask = vk::AccessFlags::TRANSFER_WRITE;
-        source_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
-        destination_stage = vk::PipelineStageFlags::TRANSFER;
-    } else if old_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL
-        && new_layout == vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
-    {
-        src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
-        dst_access_mask = vk::AccessFlags::SHADER_READ;
-        source_stage = vk::PipelineStageFlags::TRANSFER;
-        destination_stage = vk::PipelineStageFlags::FRAGMENT_SHADER;
-    } else if old_layout == vk::ImageLayout::UNDEFINED
-        && new_layout == vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL
-    {
-        src_access_mask = vk::AccessFlags::empty();
-        dst_access_mask =
-            vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE;
-        source_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
-        destination_stage = vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
-    } else {
-        panic!("Unsupported layout transition!")
-    }
-
-    let image_barriers = [vk::ImageMemoryBarrier {
-        s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
-        p_next: ptr::null(),
-        src_access_mask,
-        dst_access_mask,
-        old_layout,
-        new_layout,
-        src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
-        dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
-        image,
-        subresource_range: vk::ImageSubresourceRange {
-            aspect_mask: vk::ImageAspectFlags::COLOR,
-            base_mip_level: 0,
-            level_count: mip_levels,
-            base_array_layer: 0,
-            layer_count: 1,
-        },
-    }];
-
-    unsafe {
-        device.cmd_pipeline_barrier(
-            command_buffer,
-            source_stage,
-            destination_stage,
-            vk::DependencyFlags::empty(),
-            &[],
-            &[],
-            &image_barriers,
-        );
-    }
-
-    end_single_time_command(device, command_pool, submit_queue, command_buffer);
-}
-
 pub fn create_image_views(
-    device: &ash::Device,
+    device: Arc<VulkanDevice>,
     surface_format: vk::Format,
     images: &Vec<vk::Image>,
 ) -> Vec<vk::ImageView> {
@@ -861,7 +794,7 @@ pub fn create_image_views(
         .iter()
         .map(|&image| {
             create_image_view(
-                device,
+                device.clone(),
                 image,
                 surface_format,
                 vk::ImageAspectFlags::COLOR,
@@ -874,7 +807,7 @@ pub fn create_image_views(
 }
 
 pub fn create_image_view(
-    device: &ash::Device,
+    device: Arc<VulkanDevice>,
     image: vk::Image,
     format: vk::Format,
     aspect_flags: vk::ImageAspectFlags,
@@ -904,18 +837,19 @@ pub fn create_image_view(
 
     unsafe {
         device
+            .logical_device
             .create_image_view(&imageview_create_info, None)
             .expect("Failed to create Image View!")
     }
 }
 
 pub fn create_texture_image_view(
-    device: &ash::Device,
+    device: Arc<VulkanDevice>,
     texture_image: vk::Image,
     mip_levels: u32,
 ) -> vk::ImageView {
     create_image_view(
-        device,
+        device.clone(),
         texture_image,
         vk::Format::R8G8B8A8_UNORM,
         vk::ImageAspectFlags::COLOR,
@@ -923,7 +857,7 @@ pub fn create_texture_image_view(
     )
 }
 
-pub fn create_texture_sampler(device: &ash::Device) -> vk::Sampler {
+pub fn create_texture_sampler(device: Arc<VulkanDevice>) -> vk::Sampler {
     let sampler_create_info = vk::SamplerCreateInfo {
         s_type: vk::StructureType::SAMPLER_CREATE_INFO,
         p_next: ptr::null(),
@@ -947,13 +881,14 @@ pub fn create_texture_sampler(device: &ash::Device) -> vk::Sampler {
 
     unsafe {
         device
+            .logical_device
             .create_sampler(&sampler_create_info, None)
             .expect("Failed to create Sampler!")
     }
 }
 
 pub fn create_texture_image(
-    device: Arc<ash::Device>,
+    device: Arc<VulkanDevice>,
     command_pool: vk::CommandPool,
     submit_queue: vk::Queue,
     device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
@@ -978,7 +913,7 @@ pub fn create_texture_image(
     }
 
     let (staging_buffer, staging_buffer_memory) = create_buffer_2(
-        device.clone(),
+        device.logical_device.clone(),
         image_size,
         vk::BufferUsageFlags::TRANSFER_SRC,
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
@@ -987,6 +922,7 @@ pub fn create_texture_image(
 
     unsafe {
         let data_ptr = device
+            .logical_device
             .map_memory(
                 staging_buffer_memory,
                 0,
@@ -997,11 +933,11 @@ pub fn create_texture_image(
 
         data_ptr.copy_from_nonoverlapping(image_data.as_ptr(), image_data.len());
 
-        device.unmap_memory(staging_buffer_memory);
+        device.logical_device.unmap_memory(staging_buffer_memory);
     }
 
     let (texture_image, texture_image_memory) = create_image(
-        &device,
+        device.logical_device.clone(),
         image_width,
         image_height,
         1,
@@ -1013,8 +949,8 @@ pub fn create_texture_image(
         device_memory_properties,
     );
 
-    transition_image_layout(
-        &device,
+    img::transition_image_layout(
+        device.clone(),
         command_pool,
         submit_queue,
         texture_image,
@@ -1024,8 +960,8 @@ pub fn create_texture_image(
         1,
     );
 
-    copy_buffer_to_image(
-        &device,
+    cmd::copy_buffer_to_image(
+        device.clone(),
         command_pool,
         submit_queue,
         staging_buffer,
@@ -1034,8 +970,8 @@ pub fn create_texture_image(
         image_height,
     );
 
-    transition_image_layout(
-        &device,
+    img::transition_image_layout(
+        device.clone(),
         command_pool,
         submit_queue,
         texture_image,
@@ -1046,16 +982,18 @@ pub fn create_texture_image(
     );
 
     unsafe {
-        device.destroy_buffer(staging_buffer, None);
-        device.free_memory(staging_buffer_memory, None);
+        device.logical_device.destroy_buffer(staging_buffer, None);
+        device
+            .logical_device
+            .free_memory(staging_buffer_memory, None);
     }
 
     (texture_image, texture_image_memory)
 }
 
 pub fn create_depth_resources(
-    instance: &ash::Instance,
-    device: &ash::Device,
+    instance: Arc<ash::Instance>,
+    device: Arc<VulkanDevice>,
     physical_device: vk::PhysicalDevice,
     _command_pool: vk::CommandPool,
     _submit_queue: vk::Queue,
@@ -1063,9 +1001,9 @@ pub fn create_depth_resources(
     device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
     msaa_samples: vk::SampleCountFlags,
 ) -> (vk::Image, vk::ImageView, vk::DeviceMemory) {
-    let depth_format = find_depth_format(instance, physical_device);
+    let depth_format = find_depth_format(instance.clone(), physical_device);
     let (depth_image, depth_image_memory) = create_image(
-        device,
+        device.logical_device.clone(),
         swapchain_extent.width,
         swapchain_extent.height,
         1,
@@ -1077,7 +1015,7 @@ pub fn create_depth_resources(
         device_memory_properties,
     );
     let depth_image_view = create_image_view(
-        device,
+        device.clone(),
         depth_image,
         depth_format,
         vk::ImageAspectFlags::DEPTH,
@@ -1088,7 +1026,7 @@ pub fn create_depth_resources(
 }
 
 pub fn generate_mipmaps(
-    device: &ash::Device,
+    device: Arc<VulkanDevice>,
     command_pool: vk::CommandPool,
     submit_queue: vk::Queue,
     image: vk::Image,
@@ -1096,7 +1034,7 @@ pub fn generate_mipmaps(
     tex_height: u32,
     mip_levels: u32,
 ) {
-    let command_buffer = begin_single_time_command(device, command_pool);
+    let command_buffer = begin_single_time_command(device.clone(), command_pool);
 
     let mut image_barrier = vk::ImageMemoryBarrier {
         s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
@@ -1128,7 +1066,7 @@ pub fn generate_mipmaps(
         image_barrier.dst_access_mask = vk::AccessFlags::TRANSFER_READ;
 
         unsafe {
-            device.cmd_pipeline_barrier(
+            device.logical_device.cmd_pipeline_barrier(
                 command_buffer,
                 vk::PipelineStageFlags::TRANSFER,
                 vk::PipelineStageFlags::TRANSFER,
@@ -1171,7 +1109,7 @@ pub fn generate_mipmaps(
         }];
 
         unsafe {
-            device.cmd_blit_image(
+            device.logical_device.cmd_blit_image(
                 command_buffer,
                 image,
                 vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -1188,7 +1126,7 @@ pub fn generate_mipmaps(
         image_barrier.dst_access_mask = vk::AccessFlags::SHADER_READ;
 
         unsafe {
-            device.cmd_pipeline_barrier(
+            device.logical_device.cmd_pipeline_barrier(
                 command_buffer,
                 vk::PipelineStageFlags::TRANSFER,
                 vk::PipelineStageFlags::FRAGMENT_SHADER,
@@ -1210,7 +1148,7 @@ pub fn generate_mipmaps(
     image_barrier.dst_access_mask = vk::AccessFlags::SHADER_READ;
 
     unsafe {
-        device.cmd_pipeline_barrier(
+        device.logical_device.cmd_pipeline_barrier(
             command_buffer,
             vk::PipelineStageFlags::TRANSFER,
             vk::PipelineStageFlags::FRAGMENT_SHADER,

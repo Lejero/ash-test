@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-use crate::g_model::basic_model::BasicModel;
+use crate::vk_model::basic_model::*;
+use crate::vk_model::intermediate_model::*;
 use std::sync::Arc;
 
 use ash::vk;
@@ -72,7 +73,7 @@ impl SimpleVertex {
 pub struct Vertex {
     pub pos: Vec3,
     pub color: Vec3,
-    pub tex_coord: Vec2,
+    pub uv: Vec2,
 }
 #[allow(dead_code)]
 impl Vertex {
@@ -102,7 +103,7 @@ impl Vertex {
                 binding: 0,
                 location: 2,
                 format: vk::Format::R32G32_SFLOAT,
-                offset: offset_of!(Self, tex_coord) as u32,
+                offset: offset_of!(Self, uv) as u32,
             },
         ]
     }
@@ -157,4 +158,36 @@ pub fn get_rect_as_basic(x_dim: f32, y_dim: f32) -> Arc<BasicModel> {
     let indices: [u32; 6] = [0, 1, 2, 2, 3, 0];
 
     Arc::new(BasicModel::new(vertices.to_vec(), indices.to_vec()))
+}
+#[allow(dead_code)]
+pub fn get_rect_as_intermediate(x_dim: f32, y_dim: f32) -> Arc<IntermediateModel> {
+    let half_x = x_dim / 2.0;
+    let half_y = y_dim / 2.0;
+
+    let vertices: [Vertex; 4] = [
+        Vertex {
+            pos: Vec3::new(-half_x, -half_y, 0.0),
+            color: Vec3::new(1.0, 0.0, 0.0),
+            uv: Vec2::new(1.0, 0.0),
+        },
+        Vertex {
+            pos: Vec3::new(half_x, -half_y, 0.0),
+            color: Vec3::new(0.0, 1.0, 0.0),
+            uv: Vec2::new(0.0, 0.0),
+        },
+        Vertex {
+            pos: Vec3::new(half_x, half_y, 0.0),
+            color: Vec3::new(0.0, 0.0, 1.0),
+            uv: Vec2::new(0.0, 1.0),
+        },
+        Vertex {
+            pos: Vec3::new(-half_x, half_y, 0.0),
+            color: Vec3::new(1.0, 1.0, 1.0),
+            uv: Vec2::new(1.0, 1.0),
+        },
+    ];
+
+    let indices: [u32; 6] = [0, 1, 2, 2, 3, 0];
+
+    Arc::new(IntermediateModel::new(vertices.to_vec(), indices.to_vec()))
 }

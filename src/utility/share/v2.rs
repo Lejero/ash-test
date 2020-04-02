@@ -4,6 +4,9 @@ use std::ptr;
 
 use super::*;
 use crate::vk_assist::structures::{SyncObjects, UniformBufferObject, Vertex};
+use crate::vk_assist::types::buffer as bfr;
+use crate::vk_assist::types::command as cmd;
+use crate::vk_assist::types::image as img;
 use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
 
 pub fn create_descriptor_pool(

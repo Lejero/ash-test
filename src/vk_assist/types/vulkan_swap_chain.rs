@@ -45,9 +45,9 @@ pub struct ImageSize {
 pub struct VulkanSwapChain {
     pub swapchain_loader: ash::extensions::khr::Swapchain,
     pub swapchain: vk::SwapchainKHR,
-    pub swapchain_images: Vec<vk::Image>,
-    pub swapchain_format: vk::Format,
-    pub swapchain_extent: vk::Extent2D,
+    pub images: Vec<vk::Image>,
+    pub format: vk::Format,
+    pub extent: vk::Extent2D,
     // pub swapchain_imageviews: Vec<vk::ImageView>,
     // pub swapchain_framebuffers: Vec<vk::Framebuffer>,
 }
@@ -115,8 +115,7 @@ impl VulkanSwapChain {
                 .create_swapchain(&swapchain_create_info, None)
                 .expect("Failed to create Swapchain!")
         };
-
-        let swapchain_images = unsafe {
+        let images = unsafe {
             swapchain_loader
                 .get_swapchain_images(swapchain)
                 .expect("Failed to get Swapchain Images.")
@@ -125,9 +124,9 @@ impl VulkanSwapChain {
         VulkanSwapChain {
             swapchain_loader,
             swapchain,
-            swapchain_images,
-            swapchain_format: surface_format.format,
-            swapchain_extent: extent,
+            images,
+            format: surface_format.format,
+            extent,
         }
     }
 

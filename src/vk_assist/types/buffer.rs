@@ -2,12 +2,9 @@
 #![allow(unused_imports)]
 
 //mod utility;
-use crate::g_model;
 use crate::utility;
 use crate::vk_assist;
 use std::sync::Arc;
-
-use g_model::basic_model::BasicModel;
 
 use ash::version::DeviceV1_0;
 use ash::version::InstanceV1_0;
@@ -24,9 +21,7 @@ use std::ffi::CString;
 use std::ptr;
 
 use vk_assist::structures::{get_rect_as_basic, get_rectangle, SimpleVertex};
-use vk_assist::types::{
-    vulkan_device, vulkan_device::VulkanDevice, vulkan_surface::VulkanSurface, vulkan_swap_chain::*,
-};
+use vk_assist::types::{vulkan_device, vulkan_device::VulkanDevice, vulkan_surface::VulkanSurface, vulkan_swap_chain::*};
 
 use super::command::{begin_single_time_command, end_single_time_command, find_memory_type};
 
@@ -81,7 +76,7 @@ impl Buffer {
 }
 
 pub fn create_buffer(
-    device: Arc<ash::Device>,
+    device: Arc<VulkanDevice>,
     size: vk::DeviceSize,
     usage: vk::BufferUsageFlags,
     required_memory_properties: vk::MemoryPropertyFlags,
@@ -100,16 +95,13 @@ pub fn create_buffer(
 
     let buffer = unsafe {
         device
+            .logical_device
             .create_buffer(&buffer_create_info, None)
             .expect("Failed to create Vertex Buffer")
     };
 
-    let mem_requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
-    let memory_type = find_memory_type(
-        mem_requirements.memory_type_bits,
-        required_memory_properties,
-        device_memory_properties,
-    );
+    let mem_requirements = unsafe { device.logical_device.get_buffer_memory_requirements(buffer) };
+    let memory_type = find_memory_type(mem_requirements.memory_type_bits, required_memory_properties, device_memory_properties);
 
     let allocate_info = vk::MemoryAllocateInfo {
         s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
@@ -120,20 +112,20 @@ pub fn create_buffer(
 
     let buffer_memory = unsafe {
         device
+            .logical_device
             .allocate_memory(&allocate_info, None)
             .expect("Failed to allocate vertex buffer memory!")
     };
 
     unsafe {
         device
+            .logical_device
             .bind_buffer_memory(buffer, buffer_memory, 0)
             .expect("Failed to bind Buffer");
     }
 
-    //(buffer, buffer_memory)
-
     Buffer {
-        device: device.clone(),
+        device: device.logical_device.clone(),
         buffer: buffer,
         memory: buffer_memory,
         size: size,
@@ -161,18 +153,10 @@ pub fn create_buffer_2(
         p_queue_family_indices: ptr::null(),
     };
 
-    let buffer = unsafe {
-        device
-            .create_buffer(&buffer_create_info, None)
-            .expect("Failed to create Vertex Buffer")
-    };
+    let buffer = unsafe { device.create_buffer(&buffer_create_info, None).expect("Failed to create Vertex Buffer") };
 
     let mem_requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
-    let memory_type = find_memory_type(
-        mem_requirements.memory_type_bits,
-        required_memory_properties,
-        device_memory_properties,
-    );
+    let memory_type = find_memory_type(mem_requirements.memory_type_bits, required_memory_properties, device_memory_properties);
 
     let allocate_info = vk::MemoryAllocateInfo {
         s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
@@ -181,30 +165,24 @@ pub fn create_buffer_2(
         memory_type_index: memory_type,
     };
 
-    let buffer_memory = unsafe {
-        device
-            .allocate_memory(&allocate_info, None)
-            .expect("Failed to allocate vertex buffer memory!")
-    };
+    let buffer_memory = unsafe { device.allocate_memory(&allocate_info, None).expect("Failed to allocate vertex buffer memory!") };
 
     unsafe {
-        device
-            .bind_buffer_memory(buffer, buffer_memory, 0)
-            .expect("Failed to bind Buffer");
+        device.bind_buffer_memory(buffer, buffer_memory, 0).expect("Failed to bind Buffer");
     }
 
     (buffer, buffer_memory)
 }
 
 pub fn copy_buffer(
-    device: Arc<ash::Device>,
+    device: Arc<VulkanDevice>,
     submit_queue: vk::Queue,
     command_pool: vk::CommandPool,
     src_buffer: vk::Buffer,
     dst_buffer: vk::Buffer,
     size: vk::DeviceSize,
 ) {
-    let command_buffer = begin_single_time_command(&device, command_pool);
+    let command_buffer = begin_single_time_command(device.clone(), command_pool);
 
     let copy_regions = [vk::BufferCopy {
         src_offset: 0,
@@ -213,8 +191,8 @@ pub fn copy_buffer(
     }];
 
     unsafe {
-        device.cmd_copy_buffer(command_buffer, src_buffer, dst_buffer, &copy_regions);
+        device.logical_device.cmd_copy_buffer(command_buffer, src_buffer, dst_buffer, &copy_regions);
     }
 
-    end_single_time_command(&device, command_pool, submit_queue, command_buffer);
+    end_single_time_command(device.clone(), command_pool, submit_queue, command_buffer);
 }

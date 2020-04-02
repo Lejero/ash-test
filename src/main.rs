@@ -1,8 +1,4 @@
-mod g_model;
-mod pipelines;
 mod scene;
-mod utility;
-mod vk_assist;
 
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};

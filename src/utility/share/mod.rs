@@ -7,6 +7,7 @@ use ash::version::DeviceV1_0;
 use ash::version::EntryV1_0;
 use ash::version::InstanceV1_0;
 use ash::vk;
+use std::sync::Arc;
 
 use std::ffi::CString;
 use std::os::raw::c_char;
@@ -19,10 +20,13 @@ use crate::utility::debug;
 use crate::utility::platforms;
 
 use crate::vk_assist::structures::Vertex;
+use crate::vk_assist::types::buffer as bfr;
 use crate::vk_assist::types::buffer::Buffer;
+use crate::vk_assist::types::command as cmd;
 use crate::vk_assist::types::command::{
     begin_single_time_command, end_single_time_command, find_memory_type,
 };
+use crate::vk_assist::types::image as img;
 use crate::vk_assist::types::queue_family::QueueFamilyIndices;
 use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
 
@@ -157,54 +161,12 @@ pub fn has_stencil_component(format: vk::Format) -> bool {
     format == vk::Format::D32_SFLOAT_S8_UINT || format == vk::Format::D24_UNORM_S8_UINT
 }
 
-pub fn copy_buffer_to_image(
-    device: &ash::Device,
-    command_pool: vk::CommandPool,
-    submit_queue: vk::Queue,
-    buffer: vk::Buffer,
-    image: vk::Image,
-    width: u32,
-    height: u32,
-) {
-    let command_buffer = begin_single_time_command(device, command_pool);
-
-    let buffer_image_regions = [vk::BufferImageCopy {
-        image_subresource: vk::ImageSubresourceLayers {
-            aspect_mask: vk::ImageAspectFlags::COLOR,
-            mip_level: 0,
-            base_array_layer: 0,
-            layer_count: 1,
-        },
-        image_extent: vk::Extent3D {
-            width,
-            height,
-            depth: 1,
-        },
-        buffer_offset: 0,
-        buffer_image_height: 0,
-        buffer_row_length: 0,
-        image_offset: vk::Offset3D { x: 0, y: 0, z: 0 },
-    }];
-
-    unsafe {
-        device.cmd_copy_buffer_to_image(
-            command_buffer,
-            buffer,
-            image,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            &buffer_image_regions,
-        );
-    }
-
-    end_single_time_command(device, command_pool, submit_queue, command_buffer);
-}
-
 pub fn find_depth_format(
-    instance: &ash::Instance,
+    instance: Arc<ash::Instance>,
     physical_device: vk::PhysicalDevice,
 ) -> vk::Format {
     find_supported_format(
-        instance,
+        instance.clone(),
         physical_device,
         &[
             vk::Format::D32_SFLOAT,
@@ -217,7 +179,7 @@ pub fn find_depth_format(
 }
 
 pub fn find_supported_format(
-    instance: &ash::Instance,
+    instance: Arc<ash::Instance>,
     physical_device: vk::PhysicalDevice,
     candidate_formats: &[vk::Format],
     tiling: vk::ImageTiling,
@@ -263,7 +225,7 @@ pub fn load_model(model_path: &Path) -> (Vec<Vertex>, Vec<u32>) {
                     mesh.positions[i * 3 + 2],
                 ),
                 color: Vec3::new(1.0, 1.0, 1.0),
-                tex_coord: Vec2::new(mesh.texcoords[i * 2], mesh.texcoords[i * 2 + 1]),
+                uv: Vec2::new(mesh.texcoords[i * 2], mesh.texcoords[i * 2 + 1]),
             };
             vertices.push(vertex);
         }
