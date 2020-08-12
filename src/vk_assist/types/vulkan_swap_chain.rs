@@ -1,11 +1,8 @@
 #![allow(dead_code)]
-#![allow(unused_imports)]
+//#![allow(unused_imports)]
 
-use crate::utility::{constants::*, debug, share, tools};
 use crate::vk_assist::structures::SyncObjects;
-use crate::vk_assist::types::{
-    queue_family, vulkan_device, vulkan_device::VulkanDevice, vulkan_surface::VulkanSurface,
-};
+use crate::vk_assist::types::{queue_family, vulkan_device, vulkan_device::VulkanDevice, vulkan_surface::VulkanSurface};
 
 use std::ffi::CString;
 use std::os::raw::c_char;
@@ -20,10 +17,6 @@ use ash::version::InstanceV1_0;
 use ash::vk;
 use memoffset::offset_of;
 use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
-use winit::dpi::PhysicalSize;
-use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::Window;
 
 pub struct SwapChainSupportDetail {
     pub capabilities: vk::SurfaceCapabilitiesKHR,
@@ -53,12 +46,7 @@ pub struct VulkanSwapChain {
 }
 
 impl VulkanSwapChain {
-    pub fn new(
-        instance: &ash::Instance,
-        device: &VulkanDevice,
-        surface: &VulkanSurface,
-        image_size: &ImageSize,
-    ) -> VulkanSwapChain {
+    pub fn new(instance: &ash::Instance, device: &VulkanDevice, surface: &VulkanSurface, image_size: &ImageSize) -> VulkanSwapChain {
         let swapchain_support = query_swapchain_support(device.physical_device, surface);
 
         let surface_format = choose_swapchain_format(&swapchain_support.formats);
@@ -73,19 +61,16 @@ impl VulkanSwapChain {
         };
 
         //Try to pick Concurrent SharingMode if possible, that is, if the graphics and present family are the same.
-        let (image_sharing_mode, queue_family_index_count, queue_family_indices) =
-            if device.queue_family.graphics_family != device.queue_family.present_family {
-                (
-                    vk::SharingMode::CONCURRENT,
-                    2,
-                    vec![
-                        device.queue_family.graphics_family.unwrap(),
-                        device.queue_family.present_family.unwrap(),
-                    ],
-                )
-            } else {
-                (vk::SharingMode::EXCLUSIVE, 0, vec![])
-            };
+        let (image_sharing_mode, queue_family_index_count, queue_family_indices) = if device.queue_family.graphics_family != device.queue_family.present_family
+        {
+            (
+                vk::SharingMode::CONCURRENT,
+                2,
+                vec![device.queue_family.graphics_family.unwrap(), device.queue_family.present_family.unwrap()],
+            )
+        } else {
+            (vk::SharingMode::EXCLUSIVE, 0, vec![])
+        };
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR {
             s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
@@ -108,18 +93,13 @@ impl VulkanSwapChain {
             image_array_layers: 1,
         };
 
-        let swapchain_loader =
-            ash::extensions::khr::Swapchain::new(instance, &*device.logical_device);
+        let swapchain_loader = ash::extensions::khr::Swapchain::new(instance, &*device.logical_device);
         let swapchain = unsafe {
             swapchain_loader
                 .create_swapchain(&swapchain_create_info, None)
                 .expect("Failed to create Swapchain!")
         };
-        let images = unsafe {
-            swapchain_loader
-                .get_swapchain_images(swapchain)
-                .expect("Failed to get Swapchain Images.")
-        };
+        let images = unsafe { swapchain_loader.get_swapchain_images(swapchain).expect("Failed to get Swapchain Images.") };
 
         VulkanSwapChain {
             swapchain_loader,
@@ -132,8 +112,7 @@ impl VulkanSwapChain {
 
     pub fn vk_destroy(&mut self) {
         unsafe {
-            self.swapchain_loader
-                .destroy_swapchain(self.swapchain, None);
+            self.swapchain_loader.destroy_swapchain(self.swapchain, None);
         }
     }
 
@@ -161,15 +140,9 @@ impl VulkanSwapChain {
                 let render_finished_semaphore = device
                     .create_semaphore(&semaphore_create_info, None)
                     .expect("Failed to create Semaphore Object!");
-                let inflight_fence = device
-                    .create_fence(&fence_create_info, None)
-                    .expect("Failed to create Fence Object!");
-                sync_objects
-                    .image_available_semaphores
-                    .push(image_available_semaphore);
-                sync_objects
-                    .render_finished_semaphores
-                    .push(render_finished_semaphore);
+                let inflight_fence = device.create_fence(&fence_create_info, None).expect("Failed to create Fence Object!");
+                sync_objects.image_available_semaphores.push(image_available_semaphore);
+                sync_objects.render_finished_semaphores.push(render_finished_semaphore);
                 sync_objects.inflight_fences.push(inflight_fence);
             }
         }
@@ -180,16 +153,12 @@ impl VulkanSwapChain {
 impl Drop for VulkanSwapChain {
     fn drop(&mut self) {
         unsafe {
-            self.swapchain_loader
-                .destroy_swapchain(self.swapchain, None);
+            self.swapchain_loader.destroy_swapchain(self.swapchain, None);
         }
     }
 }
 
-pub fn query_swapchain_support(
-    physical_device: vk::PhysicalDevice,
-    surface: &VulkanSurface,
-) -> SwapChainSupportDetail {
+pub fn query_swapchain_support(physical_device: vk::PhysicalDevice, surface: &VulkanSurface) -> SwapChainSupportDetail {
     unsafe {
         let capabilities = surface
             .surface_loader
@@ -212,13 +181,9 @@ pub fn query_swapchain_support(
     }
 }
 
-pub fn choose_swapchain_format(
-    available_formats: &Vec<vk::SurfaceFormatKHR>,
-) -> vk::SurfaceFormatKHR {
+pub fn choose_swapchain_format(available_formats: &Vec<vk::SurfaceFormatKHR>) -> vk::SurfaceFormatKHR {
     for available_format in available_formats {
-        if available_format.format == vk::Format::B8G8R8A8_SRGB
-            && available_format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
-        {
+        if available_format.format == vk::Format::B8G8R8A8_SRGB && available_format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR {
             return available_format.clone();
         }
     }
@@ -226,9 +191,7 @@ pub fn choose_swapchain_format(
     return available_formats.first().unwrap().clone();
 }
 
-pub fn choose_swapchain_present_mode(
-    available_present_modes: &Vec<vk::PresentModeKHR>,
-) -> vk::PresentModeKHR {
+pub fn choose_swapchain_present_mode(available_present_modes: &Vec<vk::PresentModeKHR>) -> vk::PresentModeKHR {
     for &available_present_mode in available_present_modes.iter() {
         if available_present_mode == vk::PresentModeKHR::MAILBOX {
             return available_present_mode;
@@ -238,26 +201,15 @@ pub fn choose_swapchain_present_mode(
     vk::PresentModeKHR::FIFO
 }
 
-pub fn choose_swapchain_extent(
-    capabilities: &vk::SurfaceCapabilitiesKHR,
-    image_size: &ImageSize,
-) -> vk::Extent2D {
+pub fn choose_swapchain_extent(capabilities: &vk::SurfaceCapabilitiesKHR, image_size: &ImageSize) -> vk::Extent2D {
     if capabilities.current_extent.width != u32::max_value() {
         capabilities.current_extent
     } else {
         use num::clamp;
 
         vk::Extent2D {
-            width: clamp(
-                image_size.width,
-                capabilities.min_image_extent.width,
-                capabilities.max_image_extent.width,
-            ),
-            height: clamp(
-                image_size.height,
-                capabilities.min_image_extent.height,
-                capabilities.max_image_extent.height,
-            ),
+            width: clamp(image_size.width, capabilities.min_image_extent.width, capabilities.max_image_extent.width),
+            height: clamp(image_size.height, capabilities.min_image_extent.height, capabilities.max_image_extent.height),
         }
     }
 }

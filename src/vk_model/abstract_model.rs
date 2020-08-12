@@ -3,10 +3,6 @@
 
 use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
 
-//mod utility;
-use crate::utility;
-use utility::{constants::*, debug::*, share};
-
 use ash::version::DeviceV1_0;
 use ash::version::InstanceV1_0;
 use ash::vk;
@@ -22,9 +18,7 @@ use std::ptr;
 use super::MeshSize;
 use crate::vk_assist;
 use vk_assist::structures::SimpleVertex;
-use vk_assist::types::{
-    vulkan_device, vulkan_device::VulkanDevice, vulkan_surface::VulkanSurface, vulkan_swap_chain::*,
-};
+use vk_assist::types::{vulkan_device, vulkan_device::VulkanDevice, vulkan_surface::VulkanSurface, vulkan_swap_chain::*};
 
 //TODO: use type for vertices. define trait for vertices requiring get_binding_description, get_attribute_descriptions, and maybe a sizeof shorthand. Is there a trait to ensure the type can be consistently sized easily already?
 pub struct AbstractModel {

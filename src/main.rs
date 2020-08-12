@@ -1,6 +1,6 @@
 mod app;
 mod pipelines;
-mod utility;
+//mod utility;
 mod vk_assist;
 mod vk_model;
 
@@ -10,9 +10,10 @@ use winit::window::Window;
 
 use app::scene::VulkanApp;
 
-fn main() {
-    let event_loop = EventLoop::new();
+const WINDOW_TITLE: &'static str = "Vulkan App";
+const WINDOW_WIDTH: u32 = 800;
+const WINDOW_HEIGHT: u32 = 600;
 
-    let vulkan_app = VulkanApp::new(&event_loop);
-    vulkan_app.main_loop(event_loop);
+fn main() {
+    app::central::App::start(String::from(WINDOW_TITLE), WINDOW_WIDTH, WINDOW_HEIGHT);
 }

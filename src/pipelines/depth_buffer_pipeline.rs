@@ -1,5 +1,5 @@
-use crate::utility;
 use crate::vk_assist;
+use crate::vk_assist::misc_util as misc;
 use crate::vk_model;
 use std::sync::Arc;
 
@@ -7,7 +7,6 @@ use ash::version::DeviceV1_0;
 use ash::version::InstanceV1_0;
 use ash::vk;
 use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
-use utility::{constants::*, debug::*, share};
 
 use std::ffi::CString;
 use std::ptr;
@@ -21,8 +20,8 @@ pub fn create_graphics_pipeline(
     swapchain_extent: vk::Extent2D,
     ubo_set_layout: vk::DescriptorSetLayout,
 ) -> (vk::Pipeline, vk::PipelineLayout) {
-    let vert_shader_module = share::create_shader_module(&device.logical_device, include_bytes!("../../shaders/depthbuffer.vert.spv").to_vec());
-    let frag_shader_module = share::create_shader_module(&device.logical_device, include_bytes!("../../shaders/depthbuffer.frag.spv").to_vec());
+    let vert_shader_module = misc::create_shader_module(&device.logical_device, include_bytes!("../../shaders/depthbuffer.vert.spv").to_vec());
+    let frag_shader_module = misc::create_shader_module(&device.logical_device, include_bytes!("../../shaders/depthbuffer.frag.spv").to_vec());
 
     let main_function_name = CString::new("main").unwrap(); // the beginning function name in shader code.
 

@@ -2,7 +2,6 @@
 
 //mod utility;
 use crate::pipelines;
-use crate::utility;
 use crate::vk_assist;
 use crate::vk_model;
 use std::f32::consts::PI;
@@ -14,11 +13,6 @@ use ash::vk;
 use memoffset::offset_of;
 use nalgebra_glm::{identity, look_at, perspective};
 use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
-use utility::{constants::*, debug::*, share};
-use winit::dpi::PhysicalSize;
-use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::Window;
 
 use std::ffi::CString;
 use std::path::Path;

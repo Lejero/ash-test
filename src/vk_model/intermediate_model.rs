@@ -3,10 +3,6 @@
 
 use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
 
-//mod utility;
-use crate::utility;
-use utility::{constants::*, debug::*, share};
-
 use ash::version::DeviceV1_0;
 use ash::version::InstanceV1_0;
 use ash::vk;
@@ -21,9 +17,7 @@ use std::ptr;
 
 use crate::vk_assist;
 use vk_assist::structures::Vertex;
-use vk_assist::types::{
-    vulkan_device, vulkan_device::VulkanDevice, vulkan_surface::VulkanSurface, vulkan_swap_chain::*,
-};
+use vk_assist::types::{vulkan_device, vulkan_device::VulkanDevice, vulkan_surface::VulkanSurface, vulkan_swap_chain::*};
 
 use super::MeshSize;
 

@@ -3,10 +3,6 @@
 use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
 use std::sync::Arc;
 
-//mod utility;
-use crate::utility;
-use utility::{constants::*, debug::*, share};
-
 use ash::version::DeviceV1_0;
 use ash::version::InstanceV1_0;
 use ash::vk;
@@ -32,20 +28,14 @@ pub struct GFXModel {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
     pub diffuse_tex: img::Image,
-
-    pub model_matrix: Mat4,
 }
 
 impl GFXModel {
     pub fn new(vertices: Vec<Vertex>, indices: Vec<u32>, diffuse_tex: img::Image) -> GFXModel {
-        let id_mat = Mat4::identity();
-
         GFXModel {
             vertices,
             indices,
             diffuse_tex,
-
-            model_matrix: id_mat,
         }
     }
 

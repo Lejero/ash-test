@@ -1,8 +1,7 @@
 #![allow(dead_code)]
-#![allow(unused_imports)]
+//#![allow(unused_imports)]
 
 //mod utility;
-use crate::utility;
 use crate::vk_assist;
 use std::sync::Arc;
 
@@ -11,7 +10,6 @@ use ash::version::InstanceV1_0;
 use ash::vk;
 use memoffset::offset_of;
 use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
-use utility::{constants::*, debug::*, share};
 use winit::dpi::PhysicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};

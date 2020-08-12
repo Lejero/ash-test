@@ -1,7 +1,6 @@
 //#![allow(dead_code)]
 //#![allow(unused_imports)]
 
-use crate::utility;
 use crate::vk_assist;
 use crate::vk_model;
 use std::ops::DerefMut;
@@ -13,11 +12,6 @@ use ash::vk;
 use memoffset::offset_of;
 use nalgebra_glm::{identity, look_at, perspective};
 use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
-use utility::{constants::*, debug::*, share};
-use winit::dpi::PhysicalSize;
-use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::Window;
 
 use std::f32::consts::PI;
 use std::ffi::CString;
@@ -30,9 +24,7 @@ use image::GenericImageView;
 use vk_assist::misc_util as misc;
 use vk_assist::model_loader as mdl;
 use vk_assist::structures::{get_rect_as_intermediate, UniformBufferObject, Vertex};
-use vk_assist::types::buffer as bfr;
-use vk_assist::types::command as cmd;
-use vk_assist::types::image as img;
+use vk_assist::types::{buffer as bfr, command as cmd, image as img};
 use vk_assist::types::{buffer, command, vulkan_device, vulkan_device::VulkanDevice, vulkan_surface::VulkanSurface, vulkan_swap_chain::*};
 use vk_model::advanced_model::*;
 use vk_model::MeshSize;

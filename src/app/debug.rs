@@ -35,10 +35,7 @@ pub struct ValidationInfo {
     pub required_validation_layers: [&'static str; 1],
 }
 
-pub fn check_validation_layer_support(
-    entry: &ash::Entry,
-    required_validation_layers: &Vec<&str>,
-) -> bool {
+pub fn check_validation_layer_support(entry: &ash::Entry, required_validation_layers: &Vec<&str>) -> bool {
     // if support validation layer, then return true
 
     let layer_properties = entry

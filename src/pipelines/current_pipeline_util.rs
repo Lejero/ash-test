@@ -1,5 +1,5 @@
-use crate::utility;
 use crate::vk_assist;
+use crate::vk_assist::misc_util as misc;
 use crate::vk_model;
 use std::sync::Arc;
 
@@ -7,12 +7,11 @@ use ash::version::DeviceV1_0;
 use ash::version::InstanceV1_0;
 use ash::vk;
 use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
-use utility::{constants::*, debug::*, share};
 
 use std::ffi::CString;
 use std::ptr;
 
-use vk_assist::structures::{UniformBufferObject, Vertex};
+use vk_assist::structures::{Vertex, ViewProjUBO};
 use vk_assist::types::buffer as bfr;
 use vk_assist::types::command as cmd;
 use vk_assist::types::image as img;
@@ -38,7 +37,7 @@ pub fn create_render_pass(
 
     let depth_attachment = vk::AttachmentDescription {
         flags: vk::AttachmentDescriptionFlags::empty(),
-        format: share::find_depth_format(instance.clone(), device.physical_device),
+        format: misc::find_depth_format(instance.clone(), device.physical_device),
         samples: msaa_samples,
         load_op: vk::AttachmentLoadOp::CLEAR,
         store_op: vk::AttachmentStoreOp::DONT_CARE,
@@ -122,8 +121,8 @@ pub fn create_graphics_pipeline(
     ubo_set_layout: vk::DescriptorSetLayout,
     msaa_samples: vk::SampleCountFlags,
 ) -> (vk::Pipeline, vk::PipelineLayout) {
-    let vert_shader_module = share::create_shader_module(&device.logical_device, include_bytes!("../../shaders/depthbuffer.vert.spv").to_vec());
-    let frag_shader_module = share::create_shader_module(&device.logical_device, include_bytes!("../../shaders/depthbuffer.frag.spv").to_vec());
+    let vert_shader_module = misc::create_shader_module(&device.logical_device, include_bytes!("../../shaders/pushconst.vert.spv").to_vec());
+    let frag_shader_module = misc::create_shader_module(&device.logical_device, include_bytes!("../../shaders/pushconst.frag.spv").to_vec());
 
     let main_function_name = CString::new("main").unwrap(); // the beginning function name in shader code.
 
@@ -199,7 +198,7 @@ pub fn create_graphics_pipeline(
         p_next: ptr::null(),
         flags: vk::PipelineRasterizationStateCreateFlags::empty(),
         depth_clamp_enable: vk::FALSE,
-        cull_mode: vk::CullModeFlags::NONE,
+        cull_mode: vk::CullModeFlags::BACK,
         front_face: vk::FrontFace::COUNTER_CLOCKWISE,
         line_width: 1.0,
         polygon_mode: vk::PolygonMode::FILL,
@@ -270,14 +269,21 @@ pub fn create_graphics_pipeline(
     };
     let set_layouts = [ubo_set_layout];
 
+    let pcr = vk::PushConstantRange {
+        stage_flags: vk::ShaderStageFlags::VERTEX,
+        size: std::mem::size_of::<Mat4>() as u32,
+        offset: 0,
+    };
+    let push_constant_ranges = [pcr];
+
     let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
         s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
         p_next: ptr::null(),
         flags: vk::PipelineLayoutCreateFlags::empty(),
         set_layout_count: set_layouts.len() as u32,
         p_set_layouts: set_layouts.as_ptr(),
-        push_constant_range_count: 0,
-        p_push_constant_ranges: ptr::null(),
+        push_constant_range_count: push_constant_ranges.len() as u32,
+        p_push_constant_ranges: push_constant_ranges.as_ptr(),
     };
 
     let pipeline_layout = unsafe {
@@ -431,7 +437,7 @@ pub fn create_descriptor_sets(
         let descriptor_buffer_infos = [vk::DescriptorBufferInfo {
             buffer: uniforms_buffers[i].buffer,
             offset: 0,
-            range: ::std::mem::size_of::<UniformBufferObject>() as u64,
+            range: ::std::mem::size_of::<ViewProjUBO>() as u64,
         }];
         let descriptor_image_infos = [vk::DescriptorImageInfo {
             sampler: texture_sampler,
@@ -504,7 +510,7 @@ pub fn create_descriptor_pool(device: Arc<VulkanDevice>, swapchain_images_size: 
 }
 
 pub fn create_uniform_buffers(device: Arc<VulkanDevice>, swapchain_image_count: usize) -> Vec<bfr::Buffer> {
-    let buffer_size = std::mem::size_of::<UniformBufferObject>();
+    let buffer_size = std::mem::size_of::<ViewProjUBO>();
     let device_memory_properties = device.get_physical_device_memory_properties();
     let mut uniform_buffers = vec![];
 

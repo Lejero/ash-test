@@ -1,11 +1,8 @@
 #![allow(dead_code)]
-#![allow(unused_imports)]
+//#![allow(unused_imports)]
 
-use crate::utility::{constants::*, debug, share, tools};
-use crate::vk_assist::types::{
-    queue_family, vulkan_surface::VulkanSurface, vulkan_swap_chain,
-    vulkan_swap_chain::SwapChainSupportDetail,
-};
+use crate::app;
+use crate::vk_assist::types::{queue_family, vulkan_surface::VulkanSurface, vulkan_swap_chain, vulkan_swap_chain::SwapChainSupportDetail};
 
 use std::ffi::CString;
 use std::os::raw::c_char;
@@ -18,15 +15,17 @@ use ash::version::DeviceV1_0;
 use ash::version::EntryV1_0;
 use ash::version::InstanceV1_0;
 use ash::vk;
+pub const VALIDATION: app::debug::ValidationInfo = app::debug::ValidationInfo {
+    is_enable: true,
+    required_validation_layers: ["VK_LAYER_KHRONOS_validation"],
+};
 
 pub struct DeviceExtensions {
     pub names: [&'static str; 1],
     //    pub raw_names: [*const i8; 1],
 }
 
-pub const SWAP_CHAIN_ONLY_EXTENSIONS: DeviceExtensions = DeviceExtensions {
-    names: ["VK_KHR_swapchain"],
-};
+pub const SWAP_CHAIN_ONLY_EXTENSIONS: DeviceExtensions = DeviceExtensions { names: ["VK_KHR_swapchain"] };
 
 pub struct VulkanDevice {
     instance: Arc<ash::Instance>,
@@ -39,23 +38,11 @@ pub struct VulkanDevice {
 }
 
 impl VulkanDevice {
-    pub fn create_device(
-        instance: Arc<ash::Instance>,
-        surface: &VulkanSurface,
-        required_extensions: DeviceExtensions,
-    ) -> VulkanDevice {
+    pub fn create_device(instance: Arc<ash::Instance>, surface: &VulkanSurface, required_extensions: DeviceExtensions) -> VulkanDevice {
         let physical_device = pick_physical_device(&instance, &surface, &required_extensions);
-        let (logical_device, queue_family) = create_logical_device(
-            &instance,
-            physical_device,
-            &VALIDATION,
-            &required_extensions,
-            &surface,
-        );
-        let graphics_queue =
-            unsafe { logical_device.get_device_queue(queue_family.graphics_family.unwrap(), 0) };
-        let present_queue =
-            unsafe { logical_device.get_device_queue(queue_family.present_family.unwrap(), 0) };
+        let (logical_device, queue_family) = create_logical_device(&instance, physical_device, &VALIDATION, &required_extensions, &surface);
+        let graphics_queue = unsafe { logical_device.get_device_queue(queue_family.graphics_family.unwrap(), 0) };
+        let present_queue = unsafe { logical_device.get_device_queue(queue_family.present_family.unwrap(), 0) };
 
         VulkanDevice {
             instance: instance.clone(),
@@ -68,10 +55,7 @@ impl VulkanDevice {
     }
 
     pub fn get_physical_device_memory_properties(&self) -> vk::PhysicalDeviceMemoryProperties {
-        unsafe {
-            self.instance
-                .get_physical_device_memory_properties(self.physical_device)
-        }
+        unsafe { self.instance.get_physical_device_memory_properties(self.physical_device) }
     }
 }
 
@@ -83,24 +67,11 @@ impl Drop for VulkanDevice {
     }
 }
 
-pub fn pick_physical_device(
-    instance: &ash::Instance,
-    surface_stuff: &VulkanSurface,
-    required_device_extensions: &DeviceExtensions,
-) -> vk::PhysicalDevice {
-    let physical_devices = unsafe {
-        instance
-            .enumerate_physical_devices()
-            .expect("Failed to enumerate Physical Devices!")
-    };
+pub fn pick_physical_device(instance: &ash::Instance, surface_stuff: &VulkanSurface, required_device_extensions: &DeviceExtensions) -> vk::PhysicalDevice {
+    let physical_devices = unsafe { instance.enumerate_physical_devices().expect("Failed to enumerate Physical Devices!") };
 
     let result = physical_devices.iter().find(|physical_device| {
-        let is_suitable = is_physical_device_suitable(
-            instance,
-            **physical_device,
-            surface_stuff,
-            required_device_extensions,
-        );
+        let is_suitable = is_physical_device_suitable(instance, **physical_device, surface_stuff, required_device_extensions);
 
         // if is_suitable {
         //     let device_properties = instance.get_physical_device_properties(**physical_device);
@@ -128,27 +99,22 @@ pub fn is_physical_device_suitable(
     let indices = queue_family::find_queue_family(instance, physical_device, surface);
 
     let is_queue_family_supported = indices.is_complete();
-    let is_device_extension_supported =
-        check_device_extension_support(instance, physical_device, required_device_extensions);
+    let is_device_extension_supported = check_device_extension_support(instance, physical_device, required_device_extensions);
     let is_swapchain_supported = if is_device_extension_supported {
-        let swapchain_support =
-            vulkan_swap_chain::query_swapchain_support(physical_device, surface);
+        let swapchain_support = vulkan_swap_chain::query_swapchain_support(physical_device, surface);
         !swapchain_support.formats.is_empty() && !swapchain_support.present_modes.is_empty()
     } else {
         false
     };
     let is_support_sampler_anisotropy = device_features.sampler_anisotropy == 1;
 
-    return is_queue_family_supported
-        && is_device_extension_supported
-        && is_swapchain_supported
-        && is_support_sampler_anisotropy;
+    return is_queue_family_supported && is_device_extension_supported && is_swapchain_supported && is_support_sampler_anisotropy;
 }
 
 pub fn create_logical_device(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
-    validation: &debug::ValidationInfo,
+    validation: &app::debug::ValidationInfo,
     device_extensions: &DeviceExtensions,
     surface_stuff: &VulkanSurface,
 ) -> (ash::Device, queue_family::QueueFamilyIndices) {
@@ -183,21 +149,11 @@ pub fn create_logical_device(
         .iter()
         .map(|layer_name| CString::new(*layer_name).unwrap())
         .collect();
-    let enable_layer_names: Vec<*const c_char> = requred_validation_layer_raw_names
-        .iter()
-        .map(|layer_name| layer_name.as_ptr())
-        .collect();
+    let enable_layer_names: Vec<*const c_char> = requred_validation_layer_raw_names.iter().map(|layer_name| layer_name.as_ptr()).collect();
 
-    let enable_extension_raw_names: Vec<CString> = device_extensions
-        .names
-        .iter()
-        .map(|name| CString::new(*name).unwrap())
-        .collect();
+    let enable_extension_raw_names: Vec<CString> = device_extensions.names.iter().map(|name| CString::new(*name).unwrap()).collect();
     // let enable_extension_names = device_extensions.names.get_extensions_raw_names();
-    let enable_extension_names: Vec<*const c_char> = enable_extension_raw_names
-        .iter()
-        .map(|name| name.as_ptr())
-        .collect();
+    let enable_extension_names: Vec<*const c_char> = enable_extension_raw_names.iter().map(|name| name.as_ptr()).collect();
 
     let device_create_info = vk::DeviceCreateInfo {
         s_type: vk::StructureType::DEVICE_CREATE_INFO,
@@ -205,16 +161,8 @@ pub fn create_logical_device(
         flags: vk::DeviceCreateFlags::empty(),
         queue_create_info_count: queue_create_infos.len() as u32,
         p_queue_create_infos: queue_create_infos.as_ptr(),
-        enabled_layer_count: if validation.is_enable {
-            enable_layer_names.len()
-        } else {
-            0
-        } as u32,
-        pp_enabled_layer_names: if validation.is_enable {
-            enable_layer_names.as_ptr()
-        } else {
-            ptr::null()
-        },
+        enabled_layer_count: if validation.is_enable { enable_layer_names.len() } else { 0 } as u32,
+        pp_enabled_layer_names: if validation.is_enable { enable_layer_names.as_ptr() } else { ptr::null() },
         enabled_extension_count: enable_extension_names.len() as u32,
         pp_enabled_extension_names: enable_extension_names.as_ptr(),
         p_enabled_features: &physical_device_features,
@@ -229,11 +177,7 @@ pub fn create_logical_device(
     (device, indices)
 }
 
-pub fn check_device_extension_support(
-    instance: &ash::Instance,
-    physical_device: vk::PhysicalDevice,
-    device_extensions: &DeviceExtensions,
-) -> bool {
+pub fn check_device_extension_support(instance: &ash::Instance, physical_device: vk::PhysicalDevice, device_extensions: &DeviceExtensions) -> bool {
     let available_extensions = unsafe {
         instance
             .enumerate_device_extension_properties(physical_device)
@@ -243,7 +187,7 @@ pub fn check_device_extension_support(
     let mut available_extension_names = vec![];
 
     for extension in available_extensions.iter() {
-        let extension_name = tools::vk_to_string(&extension.extension_name);
+        let extension_name = app::tools::vk_to_string(&extension.extension_name);
 
         available_extension_names.push(extension_name);
     }
