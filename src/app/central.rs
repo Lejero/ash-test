@@ -1,5 +1,7 @@
 use super::scene;
 use crate::vk_assist::types::frame_manager::FrameManager;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -9,10 +11,11 @@ use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEve
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::Window;
 
+// #[derive(Copy, Clone)]
 pub struct App {
     //event_loop: EventLoop<()>,
     window: Arc<Window>,
-    vulkan_app: scene::VulkanApp,
+    renderer: RefCell<scene::VulkanApp>,
     delta_t: f32,
     frame_delta_t: f32,
     last_t: Instant,
@@ -23,12 +26,12 @@ impl App {
     pub fn start(title: String, width: u32, height: u32) {
         let event_loop = EventLoop::new();
         let window = Arc::new(init_window(&event_loop, &title, width, height));
-        let vulkan_app = scene::VulkanApp::new(window.clone());
+        let renderer = RefCell::new(scene::VulkanApp::new(window.clone()));
 
         let app = App {
             //event_loop: event_loop,
             window: window,
-            vulkan_app: vulkan_app,
+            renderer: renderer,
 
             delta_t: 0.0,
             frame_delta_t: 0.0,
@@ -40,44 +43,39 @@ impl App {
     }
 
     pub fn main_loop(mut self, event_loop: EventLoop<()>) {
-        event_loop.run(move |event, _, control_flow| match event {
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::KeyboardInput { input, .. } => match input {
-                    KeyboardInput { virtual_keycode, state, .. } => match (virtual_keycode, state) {
-                        (Some(VirtualKeyCode::Escape), ElementState::Pressed) => *control_flow = ControlFlow::Exit,
-                        _ => {}
+        event_loop.run(
+            move |event, _, control_flow| match event {
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                    WindowEvent::KeyboardInput { input, .. } => match input {
+                        KeyboardInput { virtual_keycode, state, .. } => match (virtual_keycode, state) {
+                            (Some(VirtualKeyCode::Escape), ElementState::Pressed) => *control_flow = ControlFlow::Exit,
+                            _ => {}
+                        },
                     },
+                    _ => {}
                 },
-                _ => {}
-            },
-            Event::MainEventsCleared => {
-                self.window.request_redraw();
-            }
-            Event::RedrawRequested(_window_id) => {
-                self.delta_t = Instant::now().duration_since(self.last_t).as_secs_f32();
-                self.frame_delta_t = self.frame_delta_t + self.delta_t;
-                self.last_t = Instant::now();
-                if self.frame_manager.should_draw_frame() {
-                    self.frame_manager.update_step_on_decasec(true);
-                    self.vulkan_app.draw_frame(self.frame_delta_t);
-                    self.frame_delta_t = 0.0;
+                Event::MainEventsCleared => {
+                    self.window.request_redraw();
                 }
-            }
-            Event::LoopDestroyed => {
-                self.vulkan_app.wait_device_idle();
-            }
-            _ => (),
-        });
+                Event::RedrawRequested(_window_id) => {
+                    self.redraw();
+                }
+                Event::LoopDestroyed => {
+                    self.renderer.borrow_mut().wait_device_idle();
+                }
+                _ => (),
+            }, //end clojure
+        );
     }
 
-    pub fn redraw(mut self) {
+    pub fn redraw(&mut self) {
         self.delta_t = Instant::now().duration_since(self.last_t).as_secs_f32();
         self.frame_delta_t = self.frame_delta_t + self.delta_t;
         self.last_t = Instant::now();
         if self.frame_manager.should_draw_frame() {
             self.frame_manager.update_step_on_decasec(true);
-            self.vulkan_app.draw_frame(self.frame_delta_t);
+            self.renderer.borrow_mut().draw_frame(self.frame_delta_t);
             self.frame_delta_t = 0.0;
         }
     }

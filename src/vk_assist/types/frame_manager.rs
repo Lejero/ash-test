@@ -3,6 +3,7 @@
 
 use std::time::Instant;
 
+#[derive(Copy, Clone)]
 pub struct FrameManager {
     pub sec_start: Instant,
     pub frame_start: Instant,
