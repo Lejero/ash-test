@@ -26,6 +26,7 @@ use std::ptr;
 use std::sync::Arc;
 use std::time::Instant;
 
+use super::camera::Camera;
 use image::GenericImageView;
 
 use vk_assist::misc_util as misc;
@@ -489,7 +490,7 @@ impl VulkanApp {
                     &[],
                 );
 
-                for (i, inst) in instances.g_instances.iter().enumerate() {
+                for (_, inst) in instances.g_instances.iter().enumerate() {
                     let fn_device = device.logical_device.fp_v1_0();
                     let state_ptr: *const c_void = &inst.model_matrix as *const _ as *const c_void;
                     fn_device.cmd_push_constants(
@@ -603,7 +604,7 @@ impl VulkanApp {
                 &[],
             );
 
-            for (i, inst) in instances.g_instances.iter().enumerate() {
+            for (_, inst) in instances.g_instances.iter().enumerate() {
                 let fn_device = device.logical_device.fp_v1_0();
                 let state_ptr: *const c_void = &inst.model_matrix as *const _ as *const c_void;
                 fn_device.cmd_push_constants(
@@ -633,6 +634,24 @@ impl VulkanApp {
 impl VulkanApp {
     fn update_uniform_buffer(&mut self, current_image: usize) {
         let ubos = [self.current_ubo];
+
+        let buffer_size = (std::mem::size_of::<ViewProjUBO>() * ubos.len()) as u64;
+
+        unsafe {
+            let data_ptr = self
+                .device
+                .logical_device
+                .map_memory(self.uniform_buffers[current_image].memory, 0, buffer_size, vk::MemoryMapFlags::empty())
+                .expect("Failed to Map Memory") as *mut ViewProjUBO;
+
+            data_ptr.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
+
+            self.device.logical_device.unmap_memory(self.uniform_buffers[current_image].memory);
+        }
+    }
+
+    fn update_uniform_buffer_with_cam(&mut self, ubo: &vk_assist::structures::ViewProjUBO, current_image: usize) {
+        let ubos = [*ubo];
 
         let buffer_size = (std::mem::size_of::<ViewProjUBO>() * ubos.len()) as u64;
 
@@ -704,6 +723,122 @@ impl VulkanApp {
         );
         //self.current_ubo.model = nalgebra_glm::rotate(&self.current_ubo.model, std::f32::consts::PI / 2.0 * delta_t, &Vec3::new(0.0, 1.0, 0.0));
         self.update_uniform_buffer(image_index as usize);
+
+        //Get Semaphores for frame.
+        let wait_semaphores = [self.image_available_semaphores[self.current_frame]];
+        let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+        let signal_semaphores = [self.render_finished_semaphores[self.current_frame]];
+
+        let submit_infos = [vk::SubmitInfo {
+            s_type: vk::StructureType::SUBMIT_INFO,
+            p_next: ptr::null(),
+            wait_semaphore_count: wait_semaphores.len() as u32,
+            p_wait_semaphores: wait_semaphores.as_ptr(),
+            p_wait_dst_stage_mask: wait_stages.as_ptr(),
+            command_buffer_count: 1,
+            p_command_buffers: &self.command_buffers[image_index as usize],
+            signal_semaphore_count: signal_semaphores.len() as u32,
+            p_signal_semaphores: signal_semaphores.as_ptr(),
+        }];
+
+        unsafe {
+            self.device.logical_device.reset_fences(&wait_fences).expect("Failed to reset Fence!");
+
+            self.device
+                .logical_device
+                .queue_submit(self.device.graphics_queue, &submit_infos, self.in_flight_fences[self.current_frame])
+                .expect("Failed to execute queue submit.");
+        }
+
+        let swapchains = [self.swap_chain.swapchain];
+
+        let present_info = vk::PresentInfoKHR {
+            s_type: vk::StructureType::PRESENT_INFO_KHR,
+            p_next: ptr::null(),
+            wait_semaphore_count: 1,
+            p_wait_semaphores: signal_semaphores.as_ptr(),
+            swapchain_count: 1,
+            p_swapchains: swapchains.as_ptr(),
+            p_image_indices: &image_index,
+            p_results: ptr::null_mut(),
+        };
+
+        let result = unsafe { self.swap_chain.swapchain_loader.queue_present(self.device.present_queue, &present_info) };
+
+        let is_resized = match result {
+            Ok(_) => self.is_framebuffer_resized,
+            Err(vk_result) => match vk_result {
+                vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR => true,
+                _ => panic!("Failed to execute queue present."),
+            },
+        };
+        if is_resized {
+            self.is_framebuffer_resized = false;
+            self.recreate_swapchain();
+        }
+
+        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+    }
+
+    pub fn draw_frame_with_cam(&mut self, delta_t: f32, camera: &Camera) {
+        let wait_fences = [self.in_flight_fences[self.current_frame]];
+
+        unsafe {
+            self.device
+                .logical_device
+                .wait_for_fences(&wait_fences, true, std::u64::MAX)
+                .expect("Failed to wait for Fence!");
+        }
+
+        let (image_index, _is_sub_optimal) = unsafe {
+            let result = self.swap_chain.swapchain_loader.acquire_next_image(
+                self.swap_chain.swapchain,
+                std::u64::MAX,
+                self.image_available_semaphores[self.current_frame],
+                vk::Fence::null(),
+            );
+            match result {
+                Ok(image_index) => image_index,
+                Err(vk_result) => match vk_result {
+                    vk::Result::ERROR_OUT_OF_DATE_KHR => {
+                        self.recreate_swapchain();
+                        return;
+                    }
+                    _ => panic!("Failed to acquire Swap Chain Image!"),
+                },
+            }
+        };
+
+        self.instances.g_instances[0].model_matrix = nalgebra_glm::rotate(
+            &self.instances.g_instances[0].model_matrix,
+            std::f32::consts::PI / 4.0 * delta_t,
+            &Vec3::new(0.0, 1.0, 0.0),
+        );
+        // unsafe {
+        //     self.device
+        //         .logical_device
+        //         .free_command_buffers(self.command_pool, &[self.command_buffers[image_index as usize]]);
+        // }
+        VulkanApp::write_command_buffer(
+            self.device.clone(),
+            self.command_pool,
+            &mut self.command_buffers[image_index as usize],
+            self.graphics_pipeline,
+            &self.swapchain_framebuffers[image_index as usize],
+            self.render_pass,
+            self.swap_chain.extent,
+            &self.vertex_buffer,
+            &self.index_buffer,
+            &self.instances,
+            self.pipeline_layout,
+            &self.descriptor_sets[image_index as usize],
+        );
+        //self.current_ubo.model = nalgebra_glm::rotate(&self.current_ubo.model, std::f32::consts::PI / 2.0 * delta_t, &Vec3::new(0.0, 1.0, 0.0));
+        let ubo = ViewProjUBO {
+            view: camera.view_mat,
+            proj: camera.perspective_mat,
+        };
+        self.update_uniform_buffer_with_cam(&ubo, image_index as usize);
 
         //Get Semaphores for frame.
         let wait_semaphores = [self.image_available_semaphores[self.current_frame]];

@@ -152,9 +152,9 @@ impl VulkanSwapChain {
 
 impl Drop for VulkanSwapChain {
     fn drop(&mut self) {
-        unsafe {
-            self.swapchain_loader.destroy_swapchain(self.swapchain, None);
-        }
+        // unsafe {
+        //     //self.swapchain_loader.destroy_swapchain(self.swapchain, None);
+        // }
     }
 }
 

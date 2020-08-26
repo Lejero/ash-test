@@ -170,7 +170,7 @@ impl Image {
 
 impl Drop for Image {
     fn drop(&mut self) {
-        self.vk_destroy();
+        //self.vk_destroy();
     }
 }
 

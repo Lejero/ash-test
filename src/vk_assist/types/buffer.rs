@@ -1,7 +1,3 @@
-#![allow(dead_code)]
-//#![allow(unused_imports)]
-
-//mod utility;
 use crate::vk_assist;
 use std::sync::Arc;
 
@@ -35,10 +31,10 @@ pub struct Buffer {
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        unsafe {
-            self.device.destroy_buffer(self.buffer, None);
-            self.device.free_memory(self.memory, None);
-        }
+        // unsafe {
+        //     //self.device.destroy_buffer(self.buffer, None);
+        //     //self.device.free_memory(self.memory, None);
+        // }
     }
 }
 

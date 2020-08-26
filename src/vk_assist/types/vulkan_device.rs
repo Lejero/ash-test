@@ -61,9 +61,9 @@ impl VulkanDevice {
 
 impl Drop for VulkanDevice {
     fn drop(&mut self) {
-        unsafe {
-            self.logical_device.destroy_device(None);
-        }
+        // unsafe {
+        //     //self.logical_device.destroy_device(None);
+        // }
     }
 }
 

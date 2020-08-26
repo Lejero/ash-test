@@ -1,6 +1,3 @@
-//#![allow(dead_code)]
-//#![allow(unused_imports)]
-
 use crate::vk_assist;
 use crate::vk_model;
 use std::ops::DerefMut;
