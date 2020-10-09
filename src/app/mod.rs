@@ -2,6 +2,7 @@ pub mod assets;
 pub mod camera;
 pub mod central;
 pub mod debug;
+pub mod input_model;
 pub mod instances;
 pub mod platforms;
 pub mod scene;

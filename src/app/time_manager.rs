@@ -68,6 +68,8 @@ impl TimeManager {
             self.sec_start = time;
             if print {
                 println!("FPS: {0}", self.frame_count as f32 / (timespan_ms as f32 / 1000.0));
+
+                //println!("{}", self.delta_t);
             }
             self.frame_count = 0;
         }

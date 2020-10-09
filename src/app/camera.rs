@@ -39,4 +39,22 @@ impl Camera {
     pub fn eye_pos_vec(&self) -> Vec3 {
         Vec3::new(self.perspective_mat[(3, 0)], self.perspective_mat[(3, 1)], self.perspective_mat[(3, 2)])
     }
+    pub fn rotate(&mut self, radians: f32, axis: &Vec3) {
+        let quaternion = nalgebra_glm::quat::<f32>(
+            (radians / 2.0).cos(),
+            axis.x * (radians / 2.0).sin(),
+            axis.y * (radians / 2.0).sin(),
+            axis.z * (radians / 2.0).sin(),
+        );
+        println!("{}", quaternion);
+        self.view_mat = nalgebra_glm::quat_cast(&quaternion) * self.view_mat;
+        // println!("{}", self.look_vec());
+        // println!("{}", self.eye_pos_vec());
+        let pos = self.eye_pos_vec();
+        self.view_mat = nalgebra_glm::rotate(&nalgebra_glm::translate(&self.view_mat, &(-pos)), radians, axis);
+        self.view_mat = nalgebra_glm::translate(&self.view_mat, &pos);
+    }
+    pub fn translate(&mut self, delta: &Vec3) {
+        self.view_mat = nalgebra_glm::translate(&self.view_mat, delta)
+    }
 }

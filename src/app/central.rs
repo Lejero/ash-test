@@ -1,4 +1,5 @@
 use super::camera::Camera;
+use super::input_model::{InputKey, InputModel};
 use super::scene;
 use super::time_manager::{PrintFPSPeriod, TimeManager};
 use std::cell::RefCell;
@@ -9,7 +10,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use winit::dpi::PhysicalSize;
-use winit::event::{ElementState, Event, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent};
+use winit::event::{ButtonId, DeviceEvent, ElementState as ES, Event, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode as VKC, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::Window;
 
@@ -19,6 +20,7 @@ pub struct App {
     window: Arc<Window>,
     renderer: RefCell<scene::VulkanApp>,
     camera: Camera,
+    input_model: InputModel,
     //Time
     time_manager: TimeManager,
 }
@@ -41,6 +43,7 @@ impl App {
             window: window,
             renderer: renderer,
             camera: cam,
+            input_model: InputModel::default(),
             time_manager: TimeManager::new(PrintFPSPeriod::Other(2200)),
         };
 
@@ -51,12 +54,21 @@ impl App {
         event_loop.run(
             move |event, _, control_flow| match event {
                 Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::Resized(physical_size) => {}
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                    WindowEvent::KeyboardInput { input, .. } => App::key_handler(input, control_flow), // match input {
-                    WindowEvent::MouseInput { .. } | WindowEvent::MouseWheel { .. } | WindowEvent::AxisMotion { .. } => App::mouse_handler(event, control_flow),
+                    WindowEvent::KeyboardInput { input, .. } => App::key_handler(input, &mut self.input_model, &mut self.camera, control_flow), // match input {
+                    WindowEvent::MouseInput { button, state, .. } => self.mouse_button_handler(button, state),
+                    _ => {}
+                },
+                Event::DeviceEvent { event, .. } => match event {
+                    DeviceEvent::MouseMotion { delta } => self.mouse_movement_handler(delta),
+                    //DeviceEvent::Button { button, state } => self.mouse_button_handler(button, state), //This only detects the left, middle, and right mouse buttons and only by numbers. The window event proves a more useful measure.
+                    DeviceEvent::Key(input) => App::key_handler(input, &mut self.input_model, &mut self.camera, control_flow),
+                    DeviceEvent::Motion { axis, value } => {}
                     _ => {}
                 },
                 Event::MainEventsCleared => {
+                    self.update();
                     self.window.request_redraw();
                 }
                 Event::RedrawRequested(_window_id) => {
@@ -71,71 +83,65 @@ impl App {
     }
 
     pub fn redraw(&mut self) {
-        // self.delta_t = Instant::now().duration_since(self.last_t).as_secs_f32();
-        // self.frame_delta_t = self.frame_delta_t + self.delta_t;
-        // self.last_t = Instant::now();
-        // if self.frame_manager.should_draw_frame() {
-        //     self.frame_manager.update_step_on_decasec(true);
-        //     self.renderer.borrow_mut().draw_frame(self.frame_delta_t);
-        //     self.frame_delta_t = 0.0;
-        // }
         if self.time_manager.update() {
             self.renderer.borrow_mut().draw_frame_with_cam(self.time_manager.frame_delta_t, &self.camera);
             self.time_manager.frame_delta_t = 0.0;
         }
     }
 
-    pub fn key_handler(input: KeyboardInput, control_flow: &mut winit::event_loop::ControlFlow) {
+    pub fn key_handler(input: KeyboardInput, input_model: &mut InputModel, camera: &mut Camera, control_flow: &mut winit::event_loop::ControlFlow) {
         match input {
             KeyboardInput { virtual_keycode, state, .. } => match (virtual_keycode, state) {
-                (Some(VirtualKeyCode::Escape), ElementState::Pressed) => *control_flow = ControlFlow::Exit,
-                (Some(VirtualKeyCode::W), ElementState::Pressed) => println!("Forward"),
-                (Some(VirtualKeyCode::S), ElementState::Pressed) => println!("Back"),
-                (Some(VirtualKeyCode::A), ElementState::Pressed) => println!("Left"),
-                (Some(VirtualKeyCode::D), ElementState::Pressed) => println!("Right"),
-                (Some(VirtualKeyCode::Q), ElementState::Pressed) => println!("Up"),
-                (Some(VirtualKeyCode::Z), ElementState::Pressed) => println!("Down"),
+                (Some(VKC::Escape), ES::Pressed) => *control_flow = ControlFlow::Exit,
+                (Some(VKC::W), es) => input_model.forward_key.key_down = es == ES::Pressed,
+                (Some(VKC::S), es) => input_model.back_key.key_down = es == ES::Pressed,
+                (Some(VKC::A), es) => input_model.left_key.key_down = es == ES::Pressed,
+                (Some(VKC::D), es) => input_model.right_key.key_down = es == ES::Pressed,
+                (Some(VKC::Q), es) => input_model.up_key.key_down = es == ES::Pressed,
+                (Some(VKC::Z), es) => input_model.down_key.key_down = es == ES::Pressed,
                 _ => {}
             },
         }
     }
 
     #[allow(unused_variables)]
-    pub fn mouse_handler(event: WindowEvent, control_flow: &mut winit::event_loop::ControlFlow) {
-        match event {
-            WindowEvent::MouseInput {
-                device_id,
-                state,
-                button,
-                modifiers,
-            } => {
-                // println!(
-                //     "Button: {0}",
-                //     match button {
-                //         MouseButton::Left => "Left",
-                //         MouseButton::Right => "Right",
-                //         MouseButton::Middle => "Middle",
-                //         MouseButton::Other(_val) => {
-                //             //format!("OtherButton({0})", _val).as_str()
-                //             "Other"
-                //         }
-                //     }
-                // )
-                match button {
-                    MouseButton::Left => println!("Left Button"),
-                    MouseButton::Right => println!("Right Button"),
-                    MouseButton::Middle => println!("Middle Button"),
-                    MouseButton::Other(val) => println!("OtherButton({0})", val),
-                }
-            }
-            WindowEvent::MouseWheel {
-                device_id,
-                delta,
-                phase,
-                modifiers,
-            } => println!("Delta:{0},{1}", "", ""),
-            WindowEvent::AxisMotion { device_id, axis, value } => println!("Axis:{0}, Value:{1}", axis, value),
-            _ => {}
+    pub fn mouse_button_handler(&mut self, button: MouseButton, state: ES) {
+        match button {
+            MouseButton::Left => println!("Button: {0}", "Left"),
+            MouseButton::Middle => println!("Button: {0}", "Middle"),
+            MouseButton::Right => println!("Button: {0}", "Right"),
+            MouseButton::Other(id) => println!("Button: Other({0})", id),
+        }
+    }
+
+    #[allow(unused_variables)]
+    pub fn mouse_movement_handler(&mut self, delta: (f64, f64)) {
+        //println!("MouseDelta:({0}, {1})", delta.0, delta.1);
+
+        //self.camera.rotate(0.1 * delta.0 as f32, &self.camera.up_vec());
+        self.camera.rotate(0.1 * delta.1 as f32, &self.camera.look_cross_up_vec());
+    }
+
+    fn update(&mut self) {
+        let scalar = 1.0 * self.time_manager.delta_t;
+
+        if self.input_model.forward_key.key_down {
+            self.camera.translate(&(-1.0 * scalar * self.camera.look_vec()).clone());
+        }
+        if self.input_model.back_key.key_down {
+            self.camera.translate(&(scalar * self.camera.look_vec()).clone());
+        }
+        if self.input_model.left_key.key_down {
+            self.camera.translate(&(-1.0 * scalar * self.camera.look_cross_up_vec()).clone());
+        }
+        if self.input_model.right_key.key_down {
+            self.camera.translate(&(scalar * self.camera.look_cross_up_vec()).clone());
+        }
+        if self.input_model.up_key.key_down {
+            self.camera.translate(&(scalar * self.camera.up_vec()).clone());
+        }
+        if self.input_model.down_key.key_down {
+            self.camera.translate(&(-1.0 * scalar * self.camera.up_vec()).clone());
         }
     }
 }
